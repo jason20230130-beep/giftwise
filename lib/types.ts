@@ -38,6 +38,11 @@ export type MerchantOffer = {
   lastSyncedAt: string | null;
 };
 
+export type Catalog = {
+  products: Product[];
+  merchantOffers: MerchantOffer[];
+};
+
 export type FinderInputs = {
   recipient: string;
   relationship: string;

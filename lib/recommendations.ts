@@ -1,11 +1,13 @@
-import { merchantOffers, products } from "./data";
-import type { FinderInputs, Marketplace, MerchantOffer, Product, Recommendation } from "./types";
+import { fallbackCatalog } from "./catalog";
+import type { Catalog, FinderInputs, Marketplace, MerchantOffer, Product, Recommendation } from "./types";
 
-const offersByProductId = merchantOffers.reduce<Record<string, MerchantOffer[]>>((index, offer) => {
+function offersByProductId(catalog: Catalog) {
+  return catalog.merchantOffers.reduce<Record<string, MerchantOffer[]>>((index, offer) => {
   if (!index[offer.productId]) index[offer.productId] = [];
   index[offer.productId].push(offer);
   return index;
-}, {});
+  }, {});
+}
 
 export function inferMarketplace(): Marketplace {
   if (typeof navigator === "undefined") return "US";
@@ -17,8 +19,8 @@ export function inferMarketplace(): Marketplace {
   return "US";
 }
 
-export function primaryOffer(product: Product, marketplace: Marketplace = "US"): MerchantOffer | null {
-  const offers = offersByProductId[product.id] || [];
+export function primaryOffer(product: Product, marketplace: Marketplace = "US", catalog: Catalog = fallbackCatalog): MerchantOffer | null {
+  const offers = offersByProductId(catalog)[product.id] || [];
   return offers.find((offer) => offer.marketplace === marketplace && offer.availability === "in_stock")
     || offers.find((offer) => offer.availability === "in_stock")
     || null;
@@ -30,8 +32,8 @@ export function trendScore(product: Product, clicks: Record<string, number> = {}
   return clickRate * 2 + product.signals.saves / 120 + product.signals.freshness + localClicks * 0.08;
 }
 
-export function scoreProduct(product: Product, inputs: FinderInputs, clicks: Record<string, number> = {}): number {
-  const offer = primaryOffer(product, inputs.marketplace);
+export function scoreProduct(product: Product, inputs: FinderInputs, clicks: Record<string, number> = {}, catalog: Catalog = fallbackCatalog): number {
+  const offer = primaryOffer(product, inputs.marketplace, catalog);
   if (!["active", "featured"].includes(product.status)) return -Infinity;
   if (!offer || !offer.affiliateUrl) return -Infinity;
   if (offer.price > inputs.budget * 1.2) return -Infinity;
@@ -58,9 +60,9 @@ export function scoreProduct(product: Product, inputs: FinderInputs, clicks: Rec
   return tagScore + budgetFit + qualityBoost + behaviorBoost + commerceBoost + timingBoost - riskPenalty;
 }
 
-export function recommend(inputs: FinderInputs, clicks: Record<string, number> = {}): Recommendation[] {
-  return products
-    .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace), score: scoreProduct(product, inputs, clicks) }))
+export function recommend(inputs: FinderInputs, clicks: Record<string, number> = {}, catalog: Catalog = fallbackCatalog): Recommendation[] {
+  return catalog.products
+    .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace, catalog), score: scoreProduct(product, inputs, clicks, catalog) }))
     .filter((item): item is Recommendation => Number.isFinite(item.score) && item.offer !== null)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { avoidances, interests, styles } from "@/lib/data";
+import { fallbackCatalog, fetchCatalog } from "@/lib/catalog";
 import {
   readClickEvents,
   readClicks,
@@ -12,7 +13,7 @@ import {
   saveRecommendationEvent
 } from "@/lib/analytics";
 import { inferMarketplace, recommend } from "@/lib/recommendations";
-import type { ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
+import type { Catalog, ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
 import { DevMetrics } from "./DevMetrics";
 import { ProductCard } from "./ProductCard";
 
@@ -31,6 +32,7 @@ export function GiftFinder() {
   const [results, setResults] = useState<Recommendation[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [clicks, setClicks] = useState<Record<string, number>>({});
+  const [catalog, setCatalog] = useState<Catalog>(fallbackCatalog);
   const [recommendationEvents, setRecommendationEvents] = useState<RecommendationEvent[]>([]);
   const [clickEvents, setClickEvents] = useState<ClickEvent[]>([]);
 
@@ -39,6 +41,7 @@ export function GiftFinder() {
     setClicks(readClicks());
     setRecommendationEvents(readRecommendationEvents());
     setClickEvents(readClickEvents());
+    void fetchCatalog().then(setCatalog);
   }, []);
 
   const resultSummary = useMemo(() => {
@@ -64,7 +67,7 @@ export function GiftFinder() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const inputs = buildInputs(new FormData(event.currentTarget));
-    const items = recommend(inputs, clicks);
+    const items = recommend(inputs, clicks, catalog);
     setResults(items);
     setHasSearched(true);
     const nextEvents = recordRecommendation(inputs, items);
@@ -76,7 +79,7 @@ export function GiftFinder() {
   }
 
   function handleClickOffer(productId: string, offerId: string) {
-    const next = recordClick(productId, offerId, marketplace);
+    const next = recordClick(productId, offerId, marketplace, catalog);
     setClicks(next.clicks);
     setClickEvents(next.events);
     const latestEvent = next.events[next.events.length - 1];
@@ -235,7 +238,7 @@ export function GiftFinder() {
         </section>
       )}
 
-      <DevMetrics marketplace={marketplace} recommendationEvents={recommendationEvents} clickEvents={clickEvents} />
+      <DevMetrics marketplace={marketplace} catalog={catalog} recommendationEvents={recommendationEvents} clickEvents={clickEvents} />
     </>
   );
 }

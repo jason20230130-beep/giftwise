@@ -1,6 +1,6 @@
-import { merchantOffers, products } from "./data";
+import { fallbackCatalog } from "./catalog";
 import { getSupabaseBrowserClient } from "./supabase";
-import type { ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "./types";
+import type { Catalog, ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "./types";
 
 const recommendationKey = "giftwise_recommendation_events";
 const clickKey = "giftwise_click_events";
@@ -69,11 +69,11 @@ export async function saveRecommendationEvent(event: RecommendationEvent): Promi
   }
 }
 
-export function recordClick(productId: string, offerId: string, fallbackMarketplace: Marketplace): {
+export function recordClick(productId: string, offerId: string, fallbackMarketplace: Marketplace, catalog: Catalog = fallbackCatalog): {
   clicks: Record<string, number>;
   events: ClickEvent[];
 } {
-  const offer = merchantOffers.find((item) => item.id === offerId) || null;
+  const offer = catalog.merchantOffers.find((item) => item.id === offerId) || null;
   const clicks = readClicks();
   clicks[productId] = (clicks[productId] || 0) + 1;
   writeJson(clicksKey, clicks);
@@ -111,7 +111,7 @@ export async function saveClickEvent(event: ClickEvent): Promise<void> {
   }
 }
 
-export function topEventProduct(events: RecommendationEvent[] | ClickEvent[], mode: "recommendations" | "clicks"): string {
+export function topEventProduct(events: RecommendationEvent[] | ClickEvent[], mode: "recommendations" | "clicks", catalog: Catalog = fallbackCatalog): string {
   const counts = events.reduce<Record<string, number>>((index, event) => {
     const productIds = mode === "recommendations" && "recommendedProducts" in event
       ? event.recommendedProducts.map((item) => item.productId)
@@ -122,6 +122,6 @@ export function topEventProduct(events: RecommendationEvent[] | ClickEvent[], mo
     return index;
   }, {});
   const [productId, count] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || [];
-  const product = products.find((item) => item.id === productId);
+  const product = catalog.products.find((item) => item.id === productId);
   return product ? `${product.name} (${count})` : "None yet";
 }
