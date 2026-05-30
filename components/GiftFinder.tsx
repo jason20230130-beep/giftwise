@@ -238,7 +238,9 @@ export function GiftFinder() {
         </section>
       )}
 
-      <DevMetrics marketplace={marketplace} catalog={catalog} recommendationEvents={recommendationEvents} clickEvents={clickEvents} />
+      {process.env.NODE_ENV === "development" && (
+        <DevMetrics marketplace={marketplace} catalog={catalog} recommendationEvents={recommendationEvents} clickEvents={clickEvents} />
+      )}
     </>
   );
 }
