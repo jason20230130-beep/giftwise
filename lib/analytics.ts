@@ -1,4 +1,5 @@
 import { merchantOffers, products } from "./data";
+import { getSupabaseBrowserClient } from "./supabase";
 import type { ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "./types";
 
 const recommendationKey = "giftwise_recommendation_events";
@@ -53,6 +54,21 @@ export function recordRecommendation(inputs: FinderInputs, items: Recommendation
   return next;
 }
 
+export async function saveRecommendationEvent(event: RecommendationEvent): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return;
+  const { error } = await supabase.from("recommendation_events").insert({
+    id: event.id,
+    created_at: event.createdAt,
+    marketplace: event.marketplace,
+    inputs: event.inputs,
+    recommended_products: event.recommendedProducts
+  });
+  if (error) {
+    console.warn("Supabase recommendation event insert failed", error.message);
+  }
+}
+
 export function recordClick(productId: string, offerId: string, fallbackMarketplace: Marketplace): {
   clicks: Record<string, number>;
   events: ClickEvent[];
@@ -76,6 +92,23 @@ export function recordClick(productId: string, offerId: string, fallbackMarketpl
   writeJson(clickKey, nextEvents);
 
   return { clicks, events: nextEvents };
+}
+
+export async function saveClickEvent(event: ClickEvent): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) return;
+  const { error } = await supabase.from("click_events").insert({
+    id: event.id,
+    created_at: event.createdAt,
+    product_id: event.productId,
+    offer_id: event.offerId,
+    merchant: event.merchant,
+    marketplace: event.marketplace,
+    placement: event.placement
+  });
+  if (error) {
+    console.warn("Supabase click event insert failed", error.message);
+  }
 }
 
 export function topEventProduct(events: RecommendationEvent[] | ClickEvent[], mode: "recommendations" | "clicks"): string {

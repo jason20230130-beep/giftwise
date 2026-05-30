@@ -7,7 +7,9 @@ import {
   readClicks,
   readRecommendationEvents,
   recordClick,
-  recordRecommendation
+  recordRecommendation,
+  saveClickEvent,
+  saveRecommendationEvent
 } from "@/lib/analytics";
 import { inferMarketplace, recommend } from "@/lib/recommendations";
 import type { ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
@@ -65,13 +67,22 @@ export function GiftFinder() {
     const items = recommend(inputs, clicks);
     setResults(items);
     setHasSearched(true);
-    setRecommendationEvents(recordRecommendation(inputs, items));
+    const nextEvents = recordRecommendation(inputs, items);
+    setRecommendationEvents(nextEvents);
+    const latestEvent = nextEvents[nextEvents.length - 1];
+    if (latestEvent) {
+      void saveRecommendationEvent(latestEvent);
+    }
   }
 
   function handleClickOffer(productId: string, offerId: string) {
     const next = recordClick(productId, offerId, marketplace);
     setClicks(next.clicks);
     setClickEvents(next.events);
+    const latestEvent = next.events[next.events.length - 1];
+    if (latestEvent) {
+      void saveClickEvent(latestEvent);
+    }
   }
 
   return (
