@@ -20,10 +20,11 @@ export function ProductCard({ item, index, onClickOffer }: ProductCardProps) {
       <div className="product-body">
         <div className="product-meta">
           <span className="price">{money(offer.price, offer.currency)}</span>
-          <span className="score-pill">{Math.round(score * 10)} match</span>
+          <span className="score-pill">{Math.round(score * 100)} match</span>
         </div>
         <h3>{product.name}</h3>
-        <p className="reason">{product.reason}</p>
+        <p className="reason">{item.personalizedReason || product.reason}</p>
+        {item.caution && <p className="caution">{item.caution}</p>}
         <div className="product-tags">
           {tags.map((tag) => (
             <span className="tag-pill" key={tag}>{tag}</span>

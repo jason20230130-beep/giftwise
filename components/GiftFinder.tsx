@@ -12,7 +12,7 @@ import {
   saveClickEvent,
   saveRecommendationEvent
 } from "@/lib/analytics";
-import { inferMarketplace, recommend } from "@/lib/recommendations";
+import { inferMarketplace } from "@/lib/recommendations";
 import type { Catalog, ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
 import { DevMetrics } from "./DevMetrics";
 import { ProductCard } from "./ProductCard";
@@ -31,6 +31,8 @@ export function GiftFinder() {
   const [marketplace, setMarketplace] = useState<Marketplace>("US");
   const [results, setResults] = useState<Recommendation[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [clicks, setClicks] = useState<Record<string, number>>({});
   const [catalog, setCatalog] = useState<Catalog>(fallbackCatalog);
   const [recommendationEvents, setRecommendationEvents] = useState<RecommendationEvent[]>([]);
@@ -64,17 +66,36 @@ export function GiftFinder() {
     };
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError("");
+    setIsLoading(true);
     const inputs = buildInputs(new FormData(event.currentTarget));
-    const items = recommend(inputs, clicks, catalog);
-    setResults(items);
-    setHasSearched(true);
-    const nextEvents = recordRecommendation(inputs, items);
-    setRecommendationEvents(nextEvents);
-    const latestEvent = nextEvents[nextEvents.length - 1];
-    if (latestEvent) {
-      void saveRecommendationEvent(latestEvent);
+    try {
+      const response = await fetch("/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inputs })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "AI recommendation failed.");
+      }
+      const items = payload.recommendations as Recommendation[];
+      setResults(items);
+      setHasSearched(true);
+      const nextEvents = recordRecommendation(inputs, items);
+      setRecommendationEvents(nextEvents);
+      const latestEvent = nextEvents[nextEvents.length - 1];
+      if (latestEvent) {
+        void saveRecommendationEvent(latestEvent);
+      }
+    } catch (caught) {
+      setResults([]);
+      setHasSearched(false);
+      setError(caught instanceof Error ? caught.message : "AI recommendation failed.");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -215,7 +236,10 @@ export function GiftFinder() {
                 </div>
               </fieldset>
 
-              <button className="primary-button" type="submit">Get Recommendations</button>
+              {error && <p className="form-error">{error}</p>}
+              <button className="primary-button" type="submit" disabled={isLoading}>
+                {isLoading ? "Finding gifts..." : "Get Recommendations"}
+              </button>
             </form>
           </section>
         </div>

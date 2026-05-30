@@ -60,6 +60,8 @@ export type Recommendation = {
   product: Product;
   offer: MerchantOffer;
   score: number;
+  personalizedReason?: string;
+  caution?: string;
 };
 
 export type RecommendationEvent = {
