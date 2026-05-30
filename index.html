@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Giftwise AI Gift Finder</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#finder" aria-label="Giftwise home">
+        <span class="brand-mark">G</span>
+        <span>Giftwise</span>
+      </a>
+    </header>
+
+    <main>
+      <section class="finder-band" id="finder">
+        <div class="finder-layout">
+          <aside class="finder-copy">
+            <p class="eyebrow">Gift decisions made easier</p>
+            <h1>Find a gift people actually want.</h1>
+            <p class="intro">
+              Answer a few details and get shoppable recommendations chosen for the person, moment, and budget.
+            </p>
+            <div class="trust-row" aria-label="Recommendation strengths">
+              <span>Budget matched</span>
+              <span>Context aware</span>
+              <span>Easy to buy</span>
+            </div>
+          </aside>
+
+          <section class="finder-panel" aria-labelledby="finder-title">
+            <div class="panel-heading">
+              <h2 id="finder-title">Gift Finder</h2>
+            </div>
+
+            <form class="gift-form" id="giftForm">
+              <div class="field-grid">
+                <label>
+                  Recipient
+                  <select id="recipient" name="recipient">
+                    <option value="mom">Mom</option>
+                    <option value="dad">Dad</option>
+                    <option value="girlfriend">Girlfriend</option>
+                    <option value="boyfriend">Boyfriend</option>
+                    <option value="coworker">Coworker</option>
+                    <option value="friend">Friend</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="teen">Teen</option>
+                  </select>
+                </label>
+
+                <label>
+                  Relationship
+                  <select id="relationship" name="relationship">
+                    <option value="family">Family</option>
+                    <option value="partner">Partner</option>
+                    <option value="close-friend">Close friend</option>
+                    <option value="casual">Casual friend</option>
+                    <option value="professional">Professional</option>
+                  </select>
+                </label>
+
+                <label>
+                  Occasion
+                  <select id="occasion" name="occasion">
+                    <option value="birthday">Birthday</option>
+                    <option value="christmas">Christmas</option>
+                    <option value="anniversary">Anniversary</option>
+                    <option value="thank-you">Thank you</option>
+                    <option value="housewarming">Housewarming</option>
+                    <option value="graduation">Graduation</option>
+                  </select>
+                </label>
+
+                <label>
+                  Age range
+                  <select id="ageRange" name="ageRange">
+                    <option value="adult">Adult</option>
+                    <option value="teen">Teen</option>
+                    <option value="senior">Senior</option>
+                    <option value="any">Not sure</option>
+                  </select>
+                </label>
+
+                <label>
+                  Budget
+                  <select id="budget" name="budget">
+                    <option value="25">Under $25</option>
+                    <option value="50" selected>Under $50</option>
+                    <option value="100">Under $100</option>
+                    <option value="200">Under $200</option>
+                  </select>
+                </label>
+
+                <label>
+                  Timing
+                  <select id="timing" name="timing">
+                    <option value="flexible">Flexible</option>
+                    <option value="soon">This week</option>
+                    <option value="last-minute">Last minute</option>
+                  </select>
+                </label>
+              </div>
+
+              <fieldset>
+                <legend>Interests</legend>
+                <div class="chip-grid" id="interestOptions"></div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Gift style</legend>
+                <div class="chip-grid" id="styleOptions"></div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Avoid</legend>
+                <div class="chip-grid" id="avoidOptions"></div>
+              </fieldset>
+
+              <button class="primary-button" type="submit">Get Recommendations</button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="results-band is-hidden" id="results" aria-live="polite">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Personalized shortlist</p>
+            <h2>Your recommendations</h2>
+          </div>
+          <p id="resultSummary">Curated picks will appear here after you run the finder.</p>
+        </div>
+        <div class="product-grid" id="recommendations"></div>
+      </section>
+
+      <section class="metrics-band" id="metrics">
+        <details>
+          <summary>Dev metrics</summary>
+          <div class="metrics-grid" id="metricsGrid"></div>
+        </details>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        As an Amazon Associate, this site may earn from qualifying purchases. Prices and availability can change, so use retailer pages for current details.
+      </p>
+    </footer>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
