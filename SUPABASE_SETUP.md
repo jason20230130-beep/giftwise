@@ -77,6 +77,8 @@ In Vercel:
    - `EBAY_CLIENT_ID`
    - `EBAY_CLIENT_SECRET`
    - `EBAY_CAMPAIGN_ID`
+   - `OPENAI_API_KEY`
+   - `OPENAI_MODEL`
 5. Redeploy the project
 
 ## 6. Test
@@ -98,3 +100,5 @@ If rows appear, Supabase analytics is connected.
 Vercel calls `GET /api/catalog/sync/ebay` once per day. Until the eBay Developer account is approved and the eBay environment variables are configured, the route safely reports that sync is disabled.
 
 When enabled, the sync searches eBay US and eBay CA, removes unusable results, and stages new products as `draft`. Draft products are not recommended until a later gift-quality review step promotes them to `active` or `featured`.
+
+Vercel then calls `GET /api/catalog/review` once per day. This endpoint uses OpenAI to review a small batch of draft products, promote reasonable gifts to `active` or `featured`, and suppress poor candidates.

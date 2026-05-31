@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchCatalogForMarketplace } from "@/lib/catalog";
 import { isMarketplace, marketplaceFromRequest } from "@/lib/marketplace";
 import { primaryOffer } from "@/lib/recommendations";
+import { createStructuredResponse } from "@/lib/openai";
 import type { FinderInputs, Marketplace, Recommendation } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -17,14 +18,6 @@ type AiRecommendation = {
 type AiPayload = {
   recommendations: AiRecommendation[];
 };
-
-function extractOutputText(result: { output_text?: unknown; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> }) {
-  if (typeof result.output_text === "string") return result.output_text;
-  return result.output
-    ?.flatMap((item) => item.content || [])
-    .find((content) => content.type === "output_text" && typeof content.text === "string")
-    ?.text;
-}
 
 function normalizeInputs(value: Partial<FinderInputs>): FinderInputs {
   return {
@@ -100,15 +93,8 @@ export async function POST(request: Request) {
     baselineReason: product.reason
   }));
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      input: [
+  try {
+    const parsed = await createStructuredResponse("gift_recommendations", recommendationSchema(), [
         {
           role: "system",
           content: [
@@ -127,43 +113,23 @@ export async function POST(request: Request) {
             candidates: candidatePayload
           })
         }
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "gift_recommendations",
-          strict: true,
-          schema: recommendationSchema()
-        }
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    return NextResponse.json({ error: `OpenAI recommendation failed: ${message}` }, { status: 502 });
-  }
-
-  const result = await response.json();
-  const outputText = extractOutputText(result);
-  if (typeof outputText !== "string") {
-    return NextResponse.json({ error: "OpenAI response did not include output_text." }, { status: 502 });
-  }
-
-  const parsed = JSON.parse(outputText) as AiPayload;
-  const candidateByKey = new Map(candidates.map(({ product, offer }) => [`${product.id}:${offer!.id}`, { product, offer: offer! }]));
-  const recommendations: Recommendation[] = [];
-  parsed.recommendations.forEach((item) => {
-    const candidate = candidateByKey.get(`${item.productId}:${item.offerId}`);
-    if (!candidate) return;
-    recommendations.push({
-      product: candidate.product,
-      offer: candidate.offer,
-      score: item.score,
-      personalizedReason: item.reason,
-      caution: item.caution
+      ]) as AiPayload;
+    const candidateByKey = new Map(candidates.map(({ product, offer }) => [`${product.id}:${offer!.id}`, { product, offer: offer! }]));
+    const recommendations: Recommendation[] = [];
+    parsed.recommendations.forEach((item) => {
+      const candidate = candidateByKey.get(`${item.productId}:${item.offerId}`);
+      if (!candidate) return;
+      recommendations.push({
+        product: candidate.product,
+        offer: candidate.offer,
+        score: item.score,
+        personalizedReason: item.reason,
+        caution: item.caution
+      });
     });
-  });
-
-  return NextResponse.json({ marketplace: inputs.marketplace, recommendations });
+    return NextResponse.json({ marketplace: inputs.marketplace, recommendations });
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "Unknown recommendation error.";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }
