@@ -75,7 +75,7 @@ export function isEbayConfigured() {
   return Boolean(requiredEbayConfig());
 }
 
-async function getEbayAccessToken() {
+export async function getEbayAccessToken() {
   const config = requiredEbayConfig();
   if (!config) throw new Error("eBay credentials are not configured.");
   const credentials = Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64");
@@ -140,14 +140,14 @@ function mapEbayItem(item: EbaySearchItem, marketplace: Marketplace): EbaySyncIt
   };
 }
 
-export async function discoverEbayItems(query: string, marketplace: Marketplace, limit = 30) {
+export async function discoverEbayItems(query: string, marketplace: Marketplace, limit = 30, accessToken?: string) {
   const config = requiredEbayConfig();
   if (!config) throw new Error("eBay credentials are not configured.");
-  const accessToken = await getEbayAccessToken();
+  const token = accessToken || await getEbayAccessToken();
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   const response = await fetch(`https://api.ebay.com/buy/browse/v1/item_summary/search?${params}`, {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
       "X-EBAY-C-MARKETPLACE-ID": ebayMarketplaces[marketplace],
       "X-EBAY-C-ENDUSERCTX": `affiliateCampaignId=${config.campaignId}`
     }

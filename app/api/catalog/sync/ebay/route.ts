@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { defaultEbayQueries, discoverEbayItems, isEbayConfigured } from "@/lib/ebay";
+import { defaultEbayQueries, discoverEbayItems, getEbayAccessToken, isEbayConfigured } from "@/lib/ebay";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { Marketplace } from "@/lib/types";
 
@@ -21,25 +21,32 @@ export async function GET(request: Request) {
     });
   }
 
-  const supabase = getSupabaseAdminClient();
-  const marketplaces: Marketplace[] = ["US", "CA"];
-  let discovered = 0;
-  let staged = 0;
+  try {
+    const supabase = getSupabaseAdminClient();
+    const accessToken = await getEbayAccessToken();
+    const marketplaces: Marketplace[] = ["US", "CA"];
+    let discovered = 0;
+    let staged = 0;
 
-  for (const marketplace of marketplaces) {
-    for (const query of defaultEbayQueries) {
-      const items = await discoverEbayItems(query, marketplace);
-      discovered += items.length;
-      if (!items.length) continue;
-      const { error: productError } = await supabase
-        .from("products")
-        .upsert(items.map((item) => item.product), { ignoreDuplicates: true });
-      if (productError) throw new Error(`Product staging failed: ${productError.message}`);
-      const { error: offerError } = await supabase.from("merchant_offers").upsert(items.map((item) => item.offer));
-      if (offerError) throw new Error(`Offer staging failed: ${offerError.message}`);
-      staged += items.length;
+    for (const marketplace of marketplaces) {
+      for (const query of defaultEbayQueries) {
+        const items = await discoverEbayItems(query, marketplace, 30, accessToken);
+        discovered += items.length;
+        if (!items.length) continue;
+        const { error: productError } = await supabase
+          .from("products")
+          .upsert(items.map((item) => item.product), { ignoreDuplicates: true });
+        if (productError) throw new Error(`Product staging failed: ${productError.message}`);
+        const { error: offerError } = await supabase.from("merchant_offers").upsert(items.map((item) => item.offer));
+        if (offerError) throw new Error(`Offer staging failed: ${offerError.message}`);
+        staged += items.length;
+      }
     }
-  }
 
-  return NextResponse.json({ configured: true, discovered, staged });
+    return NextResponse.json({ configured: true, discovered, staged });
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "Unknown sync error.";
+    console.error("eBay catalog sync failed", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
