@@ -70,6 +70,43 @@ function statusFromScore(score: number): ProductReview["status"] {
   return "suppressed";
 }
 
+async function reviewProducts(products: DraftProduct[]): Promise<ProductReview[]> {
+  const payload = await createStructuredResponse("gift_catalog_reviews", reviewSchema(products.length), [
+    {
+      role: "system",
+      content: [
+        "You are the product editor for a curated gift recommendation site.",
+        "Review each marketplace listing conservatively.",
+        "Use featured only for genuinely appealing gifts with clear recipient value.",
+        "Use active for reasonable gift options.",
+        "Use suppressed for generic clutter, low-quality novelty items, decor signs, replacement parts, overly specific text products, unclear listings, or items unlikely to delight a recipient.",
+        "Write a concise, useful recommendation reason.",
+        "Return lowercase tags describing recipients, occasions, interests, styles, and risks."
+      ].join(" ")
+    },
+    {
+      role: "user",
+      content: JSON.stringify({ task: "Review every listed draft product exactly once.", products })
+    }
+  ]) as ReviewPayload;
+
+  const validIds = new Set(products.map((product) => product.id));
+  const reviewedIds = new Set(payload.reviews.map((review) => review.productId));
+  if (payload.reviews.length === products.length && reviewedIds.size === products.length && payload.reviews.every((review) => validIds.has(review.productId))) {
+    return payload.reviews;
+  }
+  if (products.length <= 5) {
+    throw new Error("OpenAI editorial review did not cover the full draft batch.");
+  }
+
+  const midpoint = Math.ceil(products.length / 2);
+  const reviews = await Promise.all([
+    reviewProducts(products.slice(0, midpoint)),
+    reviewProducts(products.slice(midpoint))
+  ]);
+  return reviews.flat();
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -94,31 +131,9 @@ export async function GET(request: Request) {
 
       const products = (data || []) as DraftProduct[];
       if (!products.length) break;
-      const payload = await createStructuredResponse("gift_catalog_reviews", reviewSchema(products.length), [
-        {
-          role: "system",
-          content: [
-            "You are the product editor for a curated gift recommendation site.",
-            "Review each marketplace listing conservatively.",
-            "Use featured only for genuinely appealing gifts with clear recipient value.",
-            "Use active for reasonable gift options.",
-            "Use suppressed for generic clutter, low-quality novelty items, decor signs, replacement parts, overly specific text products, unclear listings, or items unlikely to delight a recipient.",
-            "Write a concise, useful recommendation reason.",
-            "Return lowercase tags describing recipients, occasions, interests, styles, and risks."
-          ].join(" ")
-        },
-        {
-          role: "user",
-          content: JSON.stringify({ task: "Review every listed draft product exactly once.", products })
-        }
-      ]) as ReviewPayload;
-
+      const reviews = await reviewProducts(products);
       const productById = new Map(products.map((product) => [product.id, product]));
-      const reviewedIds = new Set(payload.reviews.map((review) => review.productId));
-      if (payload.reviews.length !== products.length || reviewedIds.size !== products.length || payload.reviews.some((review) => !productById.has(review.productId))) {
-        throw new Error("OpenAI editorial review did not cover the full draft batch.");
-      }
-      for (const review of payload.reviews) {
+      for (const review of reviews) {
         const product = productById.get(review.productId)!;
         const reviewedAt = new Date().toISOString();
         const status = statusFromScore(review.giftQualityScore);
