@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchCatalog } from "@/lib/catalog";
+import { fetchCatalogForMarketplace } from "@/lib/catalog";
+import { isMarketplace, marketplaceFromRequest } from "@/lib/marketplace";
 import { primaryOffer } from "@/lib/recommendations";
 import type { FinderInputs, Marketplace, Recommendation } from "@/lib/types";
 
@@ -23,10 +24,6 @@ function extractOutputText(result: { output_text?: unknown; output?: Array<{ con
     ?.flatMap((item) => item.content || [])
     .find((content) => content.type === "output_text" && typeof content.text === "string")
     ?.text;
-}
-
-function isMarketplace(value: unknown): value is Marketplace {
-  return value === "US" || value === "CA";
 }
 
 function normalizeInputs(value: Partial<FinderInputs>): FinderInputs {
@@ -78,15 +75,16 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const inputs = normalizeInputs(body.inputs || {});
-  const catalog = await fetchCatalog();
+  inputs.marketplace = marketplaceFromRequest(request, inputs.marketplace);
+  const catalog = await fetchCatalogForMarketplace(inputs.marketplace);
 
   const candidates = catalog.products
     .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace, catalog) }))
-    .filter((item) => item.offer && item.offer.price <= inputs.budget * 1.2)
-    .slice(0, 40);
+    .filter((item) => item.offer)
+    .slice(0, 80);
 
   if (!candidates.length) {
-    return NextResponse.json({ recommendations: [] });
+    return NextResponse.json({ marketplace: inputs.marketplace, recommendations: [] });
   }
 
   const candidatePayload = candidates.map(({ product, offer }) => ({
@@ -116,7 +114,7 @@ export async function POST(request: Request) {
           content: [
             "You are Giftwise, a careful gift advisor.",
             "Select only from the provided candidate products. Never invent products, offer IDs, prices, links, or merchants.",
-            "Prefer gifts that fit the recipient, relationship, occasion, budget, timing, interests, style, and avoidances.",
+            "Treat budget, recipient, relationship, occasion, timing, interests, style, and avoidances as recommendation factors, not hard filters.",
             "Avoid overly personal gifts for professional or casual relationships unless the user's inputs clearly support them.",
             "Return concise reasons that feel personal and useful, not salesy."
           ].join(" ")
@@ -167,5 +165,5 @@ export async function POST(request: Request) {
     });
   });
 
-  return NextResponse.json({ recommendations });
+  return NextResponse.json({ marketplace: inputs.marketplace, recommendations });
 }

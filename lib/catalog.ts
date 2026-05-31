@@ -1,6 +1,6 @@
 import { merchantOffers as fallbackOffers, products as fallbackProducts } from "./data";
 import { getSupabaseBrowserClient } from "./supabase";
-import type { Catalog, MerchantOffer, Product, ProductStatus } from "./types";
+import type { Catalog, Marketplace, MerchantOffer, Product, ProductStatus } from "./types";
 
 type ProductRow = {
   id: string;
@@ -80,5 +80,19 @@ export async function fetchCatalog(): Promise<Catalog> {
   return {
     products: (productRows as ProductRow[]).map(mapProduct),
     merchantOffers: (offerRows as OfferRow[]).map(mapOffer)
+  };
+}
+
+export async function fetchCatalogForMarketplace(marketplace: Marketplace): Promise<Catalog> {
+  const catalog = await fetchCatalog();
+  const merchantOffers = catalog.merchantOffers.filter((offer) => (
+    offer.marketplace === marketplace
+    && offer.availability === "in_stock"
+    && Boolean(offer.affiliateUrl)
+  ));
+  const productIds = new Set(merchantOffers.map((offer) => offer.productId));
+  return {
+    products: catalog.products.filter((product) => productIds.has(product.id)),
+    merchantOffers
   };
 }

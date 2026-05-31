@@ -11,8 +11,8 @@ POST /api/recommend
 The API route:
 
 1. Loads candidate products and offers from Supabase
-2. Filters out unavailable or over-budget offers
-3. Sends only those candidates to OpenAI
+2. Keeps only offers that are purchasable in the visitor's marketplace
+3. Sends those candidates to OpenAI without a hard budget filter
 4. Requires structured JSON output
 5. Returns selected product/offer IDs and personalized recommendation reasons
 

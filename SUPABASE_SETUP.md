@@ -1,11 +1,13 @@
 # Supabase Setup
 
-Giftwise currently uses Supabase for analytics events:
+Giftwise uses Supabase for its catalog and analytics events:
 
+- `products`
+- `merchant_offers`
 - `recommendation_events`
 - `click_events`
 
-The product catalog still lives in `lib/data.ts`. The next migration can move `products` and `merchant_offers` into Supabase.
+`lib/data.ts` remains as a packaged fallback catalog if Supabase cannot be reached.
 
 ## 1. Create a Supabase Project
 
@@ -43,6 +45,8 @@ In Supabase:
 
 Do not use the service role key in the frontend.
 
+The scheduled eBay catalog sync also requires a server-only Supabase secret key. Add it only as `SUPABASE_SECRET_KEY`, without the `NEXT_PUBLIC_` prefix.
+
 ## 4. Add Local Environment Variables
 
 Create `.env.local` in the project root:
@@ -68,6 +72,11 @@ In Vercel:
 4. Add:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SECRET_KEY`
+   - `CRON_SECRET`
+   - `EBAY_CLIENT_ID`
+   - `EBAY_CLIENT_SECRET`
+   - `EBAY_CAMPAIGN_ID`
 5. Redeploy the project
 
 ## 6. Test
@@ -83,3 +92,9 @@ After deployment:
    - `click_events`
 
 If rows appear, Supabase analytics is connected.
+
+## 7. eBay Catalog Sync
+
+Vercel calls `GET /api/catalog/sync/ebay` once per day. Until the eBay Developer account is approved and the eBay environment variables are configured, the route safely reports that sync is disabled.
+
+When enabled, the sync searches eBay US and eBay CA, removes unusable results, and stages new products as `draft`. Draft products are not recommended until a later gift-quality review step promotes them to `active` or `featured`.

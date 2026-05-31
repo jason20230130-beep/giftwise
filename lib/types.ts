@@ -1,4 +1,5 @@
 export type Marketplace = "US" | "CA";
+export type CatalogSource = "manual" | "ebay" | "amazon" | "awin";
 
 export type Option = {
   value: string;
@@ -22,6 +23,7 @@ export type Product = {
     recommendations: number;
     freshness: number;
   };
+  source?: CatalogSource;
 };
 
 export type MerchantOffer = {
@@ -36,6 +38,7 @@ export type MerchantOffer = {
   affiliateUrl: string;
   commissionRate: number | null;
   lastSyncedAt: string | null;
+  source?: CatalogSource;
 };
 
 export type Catalog = {

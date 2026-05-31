@@ -8,6 +8,8 @@ create table if not exists public.products (
   reason text not null,
   tags jsonb not null default '{}'::jsonb,
   signals jsonb not null default '{}'::jsonb,
+  source text not null default 'manual',
+  source_metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -16,6 +18,7 @@ create table if not exists public.merchant_offers (
   id text primary key,
   product_id text not null references public.products(id) on delete cascade,
   merchant text not null,
+  source text not null default 'manual',
   marketplace text not null,
   external_product_id text,
   price numeric,
@@ -51,6 +54,8 @@ create table if not exists public.click_events (
 create index if not exists merchant_offers_product_id_idx on public.merchant_offers(product_id);
 create index if not exists merchant_offers_marketplace_idx on public.merchant_offers(marketplace);
 create index if not exists merchant_offers_availability_idx on public.merchant_offers(availability);
+create index if not exists products_source_idx on public.products(source);
+create index if not exists merchant_offers_source_idx on public.merchant_offers(source);
 create index if not exists recommendation_events_created_at_idx on public.recommendation_events(created_at desc);
 create index if not exists recommendation_events_marketplace_idx on public.recommendation_events(marketplace);
 create index if not exists click_events_created_at_idx on public.click_events(created_at desc);

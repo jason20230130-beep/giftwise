@@ -82,9 +82,11 @@ export function GiftFinder() {
         throw new Error(payload.error || "AI recommendation failed.");
       }
       const items = payload.recommendations as Recommendation[];
+      const resolvedMarketplace = (payload.marketplace as Marketplace | undefined) || marketplace;
+      setMarketplace(resolvedMarketplace);
       setResults(items);
       setHasSearched(true);
-      const nextEvents = recordRecommendation(inputs, items);
+      const nextEvents = recordRecommendation({ ...inputs, marketplace: resolvedMarketplace }, items);
       setRecommendationEvents(nextEvents);
       const latestEvent = nextEvents[nextEvents.length - 1];
       if (latestEvent) {
