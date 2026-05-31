@@ -29,7 +29,7 @@ function isAuthorized(request: Request) {
   return Boolean(secret && request.headers.get("authorization") === `Bearer ${secret}`);
 }
 
-function reviewSchema() {
+function reviewSchema(productCount: number) {
   return {
     type: "object",
     additionalProperties: false,
@@ -37,6 +37,8 @@ function reviewSchema() {
     properties: {
       reviews: {
         type: "array",
+        minItems: productCount,
+        maxItems: productCount,
         items: {
           type: "object",
           additionalProperties: false,
@@ -92,7 +94,7 @@ export async function GET(request: Request) {
 
       const products = (data || []) as DraftProduct[];
       if (!products.length) break;
-      const payload = await createStructuredResponse("gift_catalog_reviews", reviewSchema(), [
+      const payload = await createStructuredResponse("gift_catalog_reviews", reviewSchema(products.length), [
         {
           role: "system",
           content: [
