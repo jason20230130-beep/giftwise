@@ -114,23 +114,20 @@ export function GiftFinder() {
   return (
     <>
       <section className="finder-band" id="finder">
-        <div className="finder-layout">
-          <aside className="finder-copy">
-            <p className="eyebrow">Gift decisions made easier</p>
-            <h1>Find a gift people actually want.</h1>
-            <p className="intro">
-              Answer a few details and get shoppable recommendations chosen for the person, moment, and budget.
-            </p>
-            <div className="trust-row" aria-label="Recommendation strengths">
-              <span>Budget matched</span>
-              <span>Context aware</span>
-              <span>Easy to buy</span>
-            </div>
-          </aside>
+        <div className="finder-shell">
+          <div className="finder-copy">
+            <p className="eyebrow">A considered shortlist, in a few details</p>
+            <h1>Good gifts start with <em>who</em>, not what.</h1>
+            <p className="intro">Tell us about the person and the moment. Giftwise will search the catalog for ideas worth giving.</p>
+          </div>
 
           <section className="finder-panel" aria-labelledby="finder-title">
             <div className="panel-heading">
-              <h2 id="finder-title">Gift Finder</h2>
+              <div>
+                <p className="step-label">01 / The brief</p>
+                <h2 id="finder-title">Who are you shopping for?</h2>
+              </div>
+              <p>We use your details to shape the shortlist.</p>
             </div>
 
             <form className="gift-form" id="giftForm" onSubmit={handleSubmit}>
@@ -202,48 +199,58 @@ export function GiftFinder() {
                 </label>
               </div>
 
-              <fieldset>
-                <legend>Interests</legend>
-                <div className="chip-grid">
-                  {interests.map((option) => (
-                    <label className="chip" key={option.value}>
-                      <input name="interests" type="checkbox" value={option.value} defaultChecked={defaultChecked.interests.includes(option.value)} />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <div className="preference-grid">
+                <fieldset>
+                  <legend>Interests</legend>
+                  <div className="chip-grid">
+                    {interests.map((option) => (
+                      <label className="chip" key={option.value}>
+                        <input name="interests" type="checkbox" value={option.value} defaultChecked={defaultChecked.interests.includes(option.value)} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
 
-              <fieldset>
-                <legend>Gift style</legend>
-                <div className="chip-grid">
-                  {styles.map((option) => (
-                    <label className="chip" key={option.value}>
-                      <input name="styles" type="checkbox" value={option.value} defaultChecked={defaultChecked.styles.includes(option.value)} />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+                <fieldset>
+                  <legend>Gift style</legend>
+                  <div className="chip-grid">
+                    {styles.map((option) => (
+                      <label className="chip" key={option.value}>
+                        <input name="styles" type="checkbox" value={option.value} defaultChecked={defaultChecked.styles.includes(option.value)} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
 
-              <fieldset>
-                <legend>Avoid</legend>
-                <div className="chip-grid">
-                  {avoidances.map((option) => (
-                    <label className="chip" key={option.value}>
-                      <input name="avoidances" type="checkbox" value={option.value} defaultChecked={defaultChecked.avoidances.includes(option.value)} />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+                <fieldset>
+                  <legend>Avoid</legend>
+                  <div className="chip-grid">
+                    {avoidances.map((option) => (
+                      <label className="chip" key={option.value}>
+                        <input name="avoidances" type="checkbox" value={option.value} defaultChecked={defaultChecked.avoidances.includes(option.value)} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
 
               {error && <p className="form-error">{error}</p>}
-              <button className="primary-button" type="submit" disabled={isLoading}>
-                {isLoading ? "Finding gifts..." : "Get Recommendations"}
-              </button>
+              <div className="submit-row">
+                <p>AI-selected from gifts available in your region.</p>
+                <button className="primary-button" type="submit" disabled={isLoading}>
+                  {isLoading ? "Curating..." : "Find thoughtful gifts"}
+                </button>
+              </div>
             </form>
           </section>
+          <div className="finder-footnote" aria-label="Recommendation strengths">
+            <span>Region matched</span>
+            <span>Budget aware</span>
+            <span>Shoppable picks</span>
+          </div>
         </div>
       </section>
 
@@ -251,8 +258,8 @@ export function GiftFinder() {
         <section className="results-band" id="results" aria-live="polite">
           <div className="section-head">
             <div>
-              <p className="eyebrow">Personalized shortlist</p>
-              <h2>Your recommendations</h2>
+              <p className="step-label">02 / Your shortlist</p>
+              <h2>Gifts worth considering.</h2>
             </div>
             <p id="resultSummary">{resultSummary}</p>
           </div>

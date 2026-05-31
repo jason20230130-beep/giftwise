@@ -8,6 +8,7 @@ export default function Home() {
           <span className="brand-mark">G</span>
           <span>Giftwise</span>
         </a>
+        <span className="header-note">AI gift finder</span>
       </header>
 
       <main>
@@ -16,7 +17,7 @@ export default function Home() {
 
       <footer className="footer">
         <p>
-          As an Amazon Associate, this site may earn from qualifying purchases. Prices and availability can change, so use retailer pages for current details.
+          Giftwise may earn a commission from qualifying purchases. Prices and availability can change, so use retailer pages for current details.
         </p>
       </footer>
     </>

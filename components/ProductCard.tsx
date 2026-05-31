@@ -16,13 +16,17 @@ export function ProductCard({ item, index, onClickOffer }: ProductCardProps) {
 
   return (
     <article className="product-card">
-      <img src={product.image} alt={product.name} loading={index > 1 ? "lazy" : "eager"} />
+      <div className="product-image-wrap">
+        <span className="product-rank">0{index + 1}</span>
+        <img src={product.image} alt={product.name} loading={index > 1 ? "lazy" : "eager"} />
+      </div>
       <div className="product-body">
         <div className="product-meta">
-          <span className="price">{money(offer.price, offer.currency)}</span>
+          <span>{product.category}</span>
           <span className="score-pill">{Math.round(score * 100)} match</span>
         </div>
         <h3>{product.name}</h3>
+        <p className="product-brand">{product.brand}</p>
         <p className="reason">{item.personalizedReason || product.reason}</p>
         {item.caution && <p className="caution">{item.caution}</p>}
         <div className="product-tags">
@@ -37,7 +41,8 @@ export function ProductCard({ item, index, onClickOffer }: ProductCardProps) {
           rel="nofollow sponsored noopener"
           onClick={() => onClickOffer(product.id, offer.id)}
         >
-          Check Price on {offer.merchant}
+          <span>View on {offer.merchant}</span>
+          <strong>{money(offer.price, offer.currency)} &rarr;</strong>
         </a>
       </div>
     </article>
