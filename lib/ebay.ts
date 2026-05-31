@@ -56,11 +56,26 @@ const ebayMarketplaces: Record<Marketplace, EbayMarketplace> = {
 export const defaultEbayQueries = [
   "gift for mom",
   "gift for dad",
+  "gift for boyfriend",
+  "gift for girlfriend",
+  "gift for friend",
   "gift for coworker",
+  "gift for teacher",
+  "gift for teen",
   "housewarming gift",
   "coffee lover gift",
+  "cooking gift",
+  "wellness gift",
+  "tech gift",
+  "reading gift",
+  "outdoor gift",
+  "personalized gift",
+  "thank you gift",
+  "anniversary gift",
   "graduation gift",
-  "gifts under 50"
+  "gifts under 25",
+  "gifts under 50",
+  "gifts under 100"
 ];
 
 function requiredEbayConfig() {
