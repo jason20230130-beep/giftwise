@@ -1,10 +1,11 @@
 import { fallbackCatalog } from "./catalog";
 import { getSupabaseBrowserClient } from "./supabase";
-import type { Catalog, ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "./types";
+import type { Catalog, ClickEvent, DuelChoiceEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "./types";
 
 const recommendationKey = "giftwise_recommendation_events";
 const clickKey = "giftwise_click_events";
 const clicksKey = "giftwise_clicks";
+const duelChoicesKey = "giftwise_duel_choice_events";
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -31,6 +32,27 @@ export function readRecommendationEvents(): RecommendationEvent[] {
 
 export function readClickEvents(): ClickEvent[] {
   return readJson<ClickEvent[]>(clickKey, []);
+}
+
+export function recordDuelChoice(event: DuelChoiceEvent): void {
+  const events = readJson<DuelChoiceEvent[]>(duelChoicesKey, []);
+  writeJson(duelChoicesKey, [...events, event].slice(-250));
+}
+
+export async function saveDuelChoiceEvent(event: DuelChoiceEvent): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.from("duel_choice_events").insert({
+    id: event.id,
+    created_at: event.createdAt,
+    recommendation_event_id: event.recommendationEventId,
+    marketplace: event.marketplace,
+    brief: event.brief,
+    winner_product_id: event.winnerProductId,
+    loser_product_id: event.loserProductId
+  });
+  if (error) {
+    console.warn("Supabase duel choice event insert failed", error.message);
+  }
 }
 
 export function recordRecommendation(inputs: FinderInputs, items: Recommendation[]): RecommendationEvent[] {

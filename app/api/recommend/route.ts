@@ -3,7 +3,7 @@ import { fetchCatalogForMarketplace } from "@/lib/catalog";
 import { isMarketplace, marketplaceFromRequest } from "@/lib/marketplace";
 import { primaryOffer } from "@/lib/recommendations";
 import { createStructuredResponse } from "@/lib/openai";
-import type { FinderInputs, Marketplace, Recommendation } from "@/lib/types";
+import type { FinderInputs, GiftMode, Marketplace, Recommendation } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -20,21 +20,16 @@ type AiPayload = {
 };
 
 function normalizeInputs(value: Partial<FinderInputs>): FinderInputs {
+  const mode: GiftMode = value.mode === "wildcard" || value.mode === "duel" ? value.mode : "thoughtful";
   return {
-    recipient: String(value.recipient || "mom"),
-    relationship: String(value.relationship || "family"),
-    occasion: String(value.occasion || "birthday"),
-    ageRange: String(value.ageRange || "adult"),
-    budget: Number(value.budget || 50),
+    brief: String(value.brief || "").trim(),
+    mode,
     marketplace: isMarketplace(value.marketplace) ? value.marketplace : "US",
-    timing: String(value.timing || "flexible"),
-    interests: Array.isArray(value.interests) ? value.interests.map(String) : [],
-    styles: Array.isArray(value.styles) ? value.styles.map(String) : [],
-    avoidances: Array.isArray(value.avoidances) ? value.avoidances.map(String) : []
+    excludedProductIds: Array.isArray(value.excludedProductIds) ? value.excludedProductIds.map(String).slice(0, 12) : []
   };
 }
 
-function recommendationSchema() {
+function recommendationSchema(resultCount: number) {
   return {
     type: "object",
     additionalProperties: false,
@@ -42,7 +37,8 @@ function recommendationSchema() {
     properties: {
       recommendations: {
         type: "array",
-        maxItems: 5,
+        minItems: resultCount,
+        maxItems: resultCount,
         items: {
           type: "object",
           additionalProperties: false,
@@ -70,8 +66,11 @@ export async function POST(request: Request) {
   const inputs = normalizeInputs(body.inputs || {});
   inputs.marketplace = marketplaceFromRequest(request, inputs.marketplace);
   const catalog = await fetchCatalogForMarketplace(inputs.marketplace);
+  const resultCount = inputs.mode === "duel" ? 2 : inputs.mode === "wildcard" ? 3 : 5;
+  const excludedIds = new Set(inputs.excludedProductIds || []);
 
   const candidates = catalog.products
+    .filter((product) => !excludedIds.has(product.id))
     .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace, catalog) }))
     .filter((item) => item.offer)
     .slice(0, 80);
@@ -94,21 +93,25 @@ export async function POST(request: Request) {
   }));
 
   try {
-    const parsed = await createStructuredResponse("gift_recommendations", recommendationSchema(), [
+    const parsed = await createStructuredResponse("gift_recommendations", recommendationSchema(resultCount), [
         {
           role: "system",
           content: [
-            "You are Giftwise, a careful gift advisor.",
+            "You are Giftwise, a sharp and warm gift advisor.",
             "Select only from the provided candidate products. Never invent products, offer IDs, prices, links, or merchants.",
-            "Treat budget, recipient, relationship, occasion, timing, interests, style, and avoidances as recommendation factors, not hard filters.",
-            "Avoid overly personal gifts for professional or casual relationships unless the user's inputs clearly support them.",
+            "Infer useful details from the user's natural-language brief. If it is sparse, choose broadly appealing gifts rather than asking questions.",
+            inputs.mode === "wildcard"
+              ? "Choose surprising but still genuinely giftable products. Avoid the most obvious safe choices."
+              : inputs.mode === "duel"
+                ? "Choose exactly two strong products with clearly different personalities so the user faces an interesting choice."
+                : "Choose the most thoughtful, practical shortlist for the user's brief.",
             "Return concise reasons that feel personal and useful, not salesy."
           ].join(" ")
         },
         {
           role: "user",
           content: JSON.stringify({
-            task: "Choose up to 5 best gifts from the candidate catalog.",
+            task: `Choose exactly ${resultCount} gifts from the candidate catalog.`,
             userInputs: inputs,
             candidates: candidatePayload
           })

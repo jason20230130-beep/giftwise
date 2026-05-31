@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Giftwise AI Gift Finder",
-  description: "Find shoppable gift recommendations matched to the person, moment, and budget."
+  description: "Describe the moment. Let AI find a gift worth giving."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

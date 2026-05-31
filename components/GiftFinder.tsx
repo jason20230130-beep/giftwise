@@ -1,33 +1,50 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { avoidances, interests, styles } from "@/lib/data";
 import { fallbackCatalog, fetchCatalog } from "@/lib/catalog";
 import {
   readClickEvents,
   readClicks,
   readRecommendationEvents,
   recordClick,
+  recordDuelChoice,
   recordRecommendation,
   saveClickEvent,
+  saveDuelChoiceEvent,
   saveRecommendationEvent
 } from "@/lib/analytics";
 import { inferMarketplace } from "@/lib/recommendations";
-import type { Catalog, ClickEvent, FinderInputs, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
+import type { Catalog, ClickEvent, DuelChoiceEvent, FinderInputs, GiftMode, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
 import { DevMetrics } from "./DevMetrics";
 import { ProductCard } from "./ProductCard";
 
-const defaultChecked = {
-  interests: ["coffee", "wellness"],
-  styles: ["practical"],
-  avoidances: ["too-personal"]
-};
-
-function checkboxValues(formData: FormData, name: string) {
-  return formData.getAll(name).map(String);
-}
+const modes: Array<{ id: GiftMode; label: string; kicker: string; placeholder: string; button: string }> = [
+  {
+    id: "thoughtful",
+    label: "Thoughtful Pick",
+    kicker: "A considered shortlist",
+    placeholder: "A birthday gift for my dad who is hard to shop for...",
+    button: "Find thoughtful gifts"
+  },
+  {
+    id: "wildcard",
+    label: "Wildcard",
+    kicker: "A little less predictable",
+    placeholder: "Surprise my coffee-obsessed coworker without being boring...",
+    button: "Surprise me"
+  },
+  {
+    id: "duel",
+    label: "Gift Duel",
+    kicker: "Two gifts enter. One gift leaves.",
+    placeholder: "Help me choose a housewarming gift for my stylish friend...",
+    button: "Start a duel"
+  }
+];
 
 export function GiftFinder() {
+  const [brief, setBrief] = useState("");
+  const [mode, setMode] = useState<GiftMode>("thoughtful");
   const [marketplace, setMarketplace] = useState<Marketplace>("US");
   const [results, setResults] = useState<Recommendation[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -37,6 +54,8 @@ export function GiftFinder() {
   const [catalog, setCatalog] = useState<Catalog>(fallbackCatalog);
   const [recommendationEvents, setRecommendationEvents] = useState<RecommendationEvent[]>([]);
   const [clickEvents, setClickEvents] = useState<ClickEvent[]>([]);
+  const [latestRecommendationEventId, setLatestRecommendationEventId] = useState<string | null>(null);
+  const [duelWinnerId, setDuelWinnerId] = useState<string | null>(null);
 
   useEffect(() => {
     setMarketplace(inferMarketplace());
@@ -46,31 +65,18 @@ export function GiftFinder() {
     void fetchCatalog().then(setCatalog);
   }, []);
 
+  const activeMode = modes.find((item) => item.id === mode)!;
   const resultSummary = useMemo(() => {
-    if (!hasSearched) return "Curated picks will appear here after you run the finder.";
-    return `${results.length} gift picks matched to your recipient, occasion, budget, and style.`;
-  }, [hasSearched, results.length]);
+    if (mode === "duel") return "Pick the gift you would actually give. There is no wrong answer, but there is a winner.";
+    if (mode === "wildcard") return `${results.length} less-obvious ideas selected from gifts available in your region.`;
+    return `${results.length} gifts selected for the person and moment you described.`;
+  }, [mode, results.length]);
 
-  function buildInputs(formData: FormData): FinderInputs {
-    return {
-      recipient: String(formData.get("recipient") || "mom"),
-      relationship: String(formData.get("relationship") || "family"),
-      occasion: String(formData.get("occasion") || "birthday"),
-      ageRange: String(formData.get("ageRange") || "adult"),
-      budget: Number(formData.get("budget") || 50),
-      marketplace,
-      timing: String(formData.get("timing") || "flexible"),
-      interests: checkboxValues(formData, "interests"),
-      styles: checkboxValues(formData, "styles"),
-      avoidances: checkboxValues(formData, "avoidances")
-    };
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runFinder(excludedProductIds: string[] = []) {
     setError("");
     setIsLoading(true);
-    const inputs = buildInputs(new FormData(event.currentTarget));
+    setDuelWinnerId(null);
+    const inputs: FinderInputs = { brief, mode, marketplace, excludedProductIds };
     try {
       const response = await fetch("/api/recommend", {
         method: "POST",
@@ -78,9 +84,7 @@ export function GiftFinder() {
         body: JSON.stringify({ inputs })
       });
       const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "AI recommendation failed.");
-      }
+      if (!response.ok) throw new Error(payload.error || "AI recommendation failed.");
       const items = payload.recommendations as Recommendation[];
       const resolvedMarketplace = (payload.marketplace as Marketplace | undefined) || marketplace;
       setMarketplace(resolvedMarketplace);
@@ -89,9 +93,8 @@ export function GiftFinder() {
       const nextEvents = recordRecommendation({ ...inputs, marketplace: resolvedMarketplace }, items);
       setRecommendationEvents(nextEvents);
       const latestEvent = nextEvents[nextEvents.length - 1];
-      if (latestEvent) {
-        void saveRecommendationEvent(latestEvent);
-      }
+      setLatestRecommendationEventId(latestEvent?.id || null);
+      if (latestEvent) void saveRecommendationEvent(latestEvent);
     } catch (caught) {
       setResults([]);
       setHasSearched(false);
@@ -101,173 +104,126 @@ export function GiftFinder() {
     }
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runFinder();
+  }
+
+  function handleReroll() {
+    void runFinder(results.map((item) => item.product.id));
+  }
+
   function handleClickOffer(productId: string, offerId: string) {
     const next = recordClick(productId, offerId, marketplace, catalog);
     setClicks(next.clicks);
     setClickEvents(next.events);
     const latestEvent = next.events[next.events.length - 1];
-    if (latestEvent) {
-      void saveClickEvent(latestEvent);
-    }
+    if (latestEvent) void saveClickEvent(latestEvent);
+  }
+
+  function handleChooseDuel(winnerProductId: string) {
+    const loser = results.find((item) => item.product.id !== winnerProductId);
+    if (!loser || duelWinnerId) return;
+    setDuelWinnerId(winnerProductId);
+    const event: DuelChoiceEvent = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      recommendationEventId: latestRecommendationEventId,
+      marketplace,
+      brief,
+      winnerProductId,
+      loserProductId: loser.product.id
+    };
+    recordDuelChoice(event);
+    void saveDuelChoiceEvent(event);
   }
 
   return (
     <>
       <section className="finder-band" id="finder">
-        <div className="finder-shell">
-          <div className="finder-copy">
-            <p className="eyebrow">A considered shortlist, in a few details</p>
-            <h1>Good gifts start with <em>who</em>, not what.</h1>
-            <p className="intro">Tell us about the person and the moment. Giftwise will search the catalog for ideas worth giving.</p>
+        <div className="search-shell">
+          <p className="eyebrow">AI gift finder</p>
+          <h1>Find a gift with a little <em>instinct.</em></h1>
+          <p className="intro">Describe the person, the occasion, or the problem. Giftwise will take it from there.</p>
+
+          <div className="mode-switcher" aria-label="Gift finder mode">
+            {modes.map((item) => (
+              <button
+                className={`mode-button ${mode === item.id ? "is-active" : ""}`}
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setMode(item.id);
+                  setHasSearched(false);
+                  setResults([]);
+                  setDuelWinnerId(null);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
 
-          <section className="finder-panel" aria-labelledby="finder-title">
-            <div className="panel-heading">
-              <div>
-                <p className="step-label">01 / The brief</p>
-                <h2 id="finder-title">Who are you shopping for?</h2>
-              </div>
-              <p>We use your details to shape the shortlist.</p>
-            </div>
-
-            <form className="gift-form" id="giftForm" onSubmit={handleSubmit}>
-              <div className="field-grid">
-                <label>
-                  Recipient
-                  <select name="recipient" defaultValue="mom">
-                    <option value="mom">Mom</option>
-                    <option value="dad">Dad</option>
-                    <option value="girlfriend">Girlfriend</option>
-                    <option value="boyfriend">Boyfriend</option>
-                    <option value="coworker">Coworker</option>
-                    <option value="friend">Friend</option>
-                    <option value="teacher">Teacher</option>
-                    <option value="teen">Teen</option>
-                  </select>
-                </label>
-
-                <label>
-                  Relationship
-                  <select name="relationship" defaultValue="family">
-                    <option value="family">Family</option>
-                    <option value="partner">Partner</option>
-                    <option value="close-friend">Close friend</option>
-                    <option value="casual">Casual friend</option>
-                    <option value="professional">Professional</option>
-                  </select>
-                </label>
-
-                <label>
-                  Occasion
-                  <select name="occasion" defaultValue="birthday">
-                    <option value="birthday">Birthday</option>
-                    <option value="christmas">Christmas</option>
-                    <option value="anniversary">Anniversary</option>
-                    <option value="thank-you">Thank you</option>
-                    <option value="housewarming">Housewarming</option>
-                    <option value="graduation">Graduation</option>
-                  </select>
-                </label>
-
-                <label>
-                  Age range
-                  <select name="ageRange" defaultValue="adult">
-                    <option value="adult">Adult</option>
-                    <option value="teen">Teen</option>
-                    <option value="senior">Senior</option>
-                    <option value="any">Not sure</option>
-                  </select>
-                </label>
-
-                <label>
-                  Budget
-                  <select name="budget" defaultValue="50">
-                    <option value="25">Under $25</option>
-                    <option value="50">Under $50</option>
-                    <option value="100">Under $100</option>
-                    <option value="200">Under $200</option>
-                  </select>
-                </label>
-
-                <label>
-                  Timing
-                  <select name="timing" defaultValue="flexible">
-                    <option value="flexible">Flexible</option>
-                    <option value="soon">This week</option>
-                    <option value="last-minute">Last minute</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="preference-grid">
-                <fieldset>
-                  <legend>Interests</legend>
-                  <div className="chip-grid">
-                    {interests.map((option) => (
-                      <label className="chip" key={option.value}>
-                        <input name="interests" type="checkbox" value={option.value} defaultChecked={defaultChecked.interests.includes(option.value)} />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-
-                <fieldset>
-                  <legend>Gift style</legend>
-                  <div className="chip-grid">
-                    {styles.map((option) => (
-                      <label className="chip" key={option.value}>
-                        <input name="styles" type="checkbox" value={option.value} defaultChecked={defaultChecked.styles.includes(option.value)} />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-
-                <fieldset>
-                  <legend>Avoid</legend>
-                  <div className="chip-grid">
-                    {avoidances.map((option) => (
-                      <label className="chip" key={option.value}>
-                        <input name="avoidances" type="checkbox" value={option.value} defaultChecked={defaultChecked.avoidances.includes(option.value)} />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              </div>
-
-              {error && <p className="form-error">{error}</p>}
-              <div className="submit-row">
-                <p>AI-selected from gifts available in your region.</p>
-                <button className="primary-button" type="submit" disabled={isLoading}>
-                  {isLoading ? "Curating..." : "Find thoughtful gifts"}
-                </button>
-              </div>
-            </form>
-          </section>
-          <div className="finder-footnote" aria-label="Recommendation strengths">
-            <span>Region matched</span>
-            <span>Budget aware</span>
-            <span>Shoppable picks</span>
-          </div>
+          <form className="search-form" onSubmit={handleSubmit}>
+            <label className="visually-hidden" htmlFor="giftBrief">Describe the gift you need</label>
+            <textarea
+              id="giftBrief"
+              value={brief}
+              onChange={(event) => setBrief(event.target.value)}
+              placeholder={activeMode.placeholder}
+              maxLength={500}
+              rows={2}
+            />
+            <button className="primary-button" type="submit" disabled={isLoading}>
+              {isLoading ? "Thinking..." : activeMode.button}
+            </button>
+          </form>
+          <p className="search-note">{activeMode.kicker}. Region matched automatically.</p>
+          {error && <p className="form-error">{error}</p>}
         </div>
       </section>
 
       {hasSearched && (
-        <section className="results-band" id="results" aria-live="polite">
+        <section className={`results-band results-${mode}`} id="results" aria-live="polite">
           <div className="section-head">
             <div>
-              <p className="step-label">02 / Your shortlist</p>
-              <h2>Gifts worth considering.</h2>
+              <p className="step-label">{mode === "duel" ? "Choose your champion" : mode === "wildcard" ? "A few wild cards" : "Your shortlist"}</p>
+              <h2>{mode === "duel" ? "Which one wins?" : mode === "wildcard" ? "Unexpected, but not unhinged." : "Worth considering."}</h2>
             </div>
-            <p id="resultSummary">{resultSummary}</p>
+            <p>{resultSummary}</p>
           </div>
-          <div className="product-grid" id="recommendations">
-            {results.map((item, index) => (
-              <ProductCard item={item} index={index} key={item.product.id} onClickOffer={handleClickOffer} />
-            ))}
-          </div>
+
+          {mode === "duel" ? (
+            <div className="duel-stage">
+              {results.map((item, index) => (
+                <div className="duel-entry" key={item.product.id}>
+                  {index === 1 && <span className="duel-vs">VS</span>}
+                  <ProductCard
+                    item={item}
+                    index={index}
+                    isWinner={duelWinnerId === item.product.id}
+                    isLoser={Boolean(duelWinnerId && duelWinnerId !== item.product.id)}
+                    onChoose={() => handleChooseDuel(item.product.id)}
+                    onClickOffer={handleClickOffer}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="product-grid" id="recommendations">
+              {results.map((item, index) => (
+                <ProductCard item={item} index={index} key={item.product.id} onClickOffer={handleClickOffer} />
+              ))}
+            </div>
+          )}
+
+          {(mode === "wildcard" || mode === "duel") && (
+            <div className="reroll-row">
+              <button className="secondary-button" type="button" onClick={handleReroll} disabled={isLoading}>
+                {mode === "duel" ? "Start another duel" : "Surprise me again"}
+              </button>
+            </div>
+          )}
         </section>
       )}
 

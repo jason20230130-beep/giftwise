@@ -4,10 +4,13 @@ import type { Recommendation } from "@/lib/types";
 type ProductCardProps = {
   item: Recommendation;
   index: number;
+  isWinner?: boolean;
+  isLoser?: boolean;
+  onChoose?: () => void;
   onClickOffer: (productId: string, offerId: string) => void;
 };
 
-export function ProductCard({ item, index, onClickOffer }: ProductCardProps) {
+export function ProductCard({ item, index, isWinner = false, isLoser = false, onChoose, onClickOffer }: ProductCardProps) {
   const { product, offer, score } = item;
   const tags = Object.entries(product.tags)
     .sort((a, b) => b[1] - a[1])
@@ -15,7 +18,7 @@ export function ProductCard({ item, index, onClickOffer }: ProductCardProps) {
     .map(([tag]) => tag.replace("-", " "));
 
   return (
-    <article className="product-card">
+    <article className={`product-card ${isWinner ? "is-winner" : ""} ${isLoser ? "is-loser" : ""}`}>
       <div className="product-image-wrap">
         <span className="product-rank">0{index + 1}</span>
         <img src={product.image} alt={product.name} loading={index > 1 ? "lazy" : "eager"} />
@@ -34,16 +37,22 @@ export function ProductCard({ item, index, onClickOffer }: ProductCardProps) {
             <span className="tag-pill" key={tag}>{tag}</span>
           ))}
         </div>
-        <a
-          className="buy-button"
-          href={offer.affiliateUrl}
-          target="_blank"
-          rel="nofollow sponsored noopener"
-          onClick={() => onClickOffer(product.id, offer.id)}
-        >
-          <span>View on {offer.merchant}</span>
-          <strong>{money(offer.price, offer.currency)} &rarr;</strong>
-        </a>
+        {isLoser ? (
+          <p className="duel-loser-note">A valiant contender.</p>
+        ) : onChoose && !isWinner ? (
+          <button className="choose-button" type="button" onClick={onChoose}>Choose this gift</button>
+        ) : (
+          <a
+            className="buy-button"
+            href={offer.affiliateUrl}
+            target="_blank"
+            rel="nofollow sponsored noopener"
+            onClick={() => onClickOffer(product.id, offer.id)}
+          >
+            <span>{isWinner ? "Winner - view on" : "View on"} {offer.merchant}</span>
+            <strong>{money(offer.price, offer.currency)} &rarr;</strong>
+          </a>
+        )}
       </div>
     </article>
   );

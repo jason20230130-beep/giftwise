@@ -16,7 +16,7 @@ export function DevMetrics({ marketplace, catalog, recommendationEvents, clickEv
         <div className="metrics-grid" id="metricsGrid">
           <div className="metric-card"><span>Marketplace</span><strong>{marketplace}</strong></div>
           <div className="metric-card"><span>Recommendation events</span><strong>{recommendationEvents.length}</strong></div>
-          <div className="metric-card"><span>Amazon click events</span><strong>{clickEvents.length}</strong></div>
+          <div className="metric-card"><span>Retailer click events</span><strong>{clickEvents.length}</strong></div>
           <div className="metric-card"><span>Catalog products</span><strong>{catalog.products.length}</strong></div>
           <div className="metric-card"><span>Top recommended</span><strong>{topEventProduct(recommendationEvents, "recommendations", catalog)}</strong></div>
           <div className="metric-card"><span>Top clicked</span><strong>{topEventProduct(clickEvents, "clicks", catalog)}</strong></div>

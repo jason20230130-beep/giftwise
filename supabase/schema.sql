@@ -51,6 +51,16 @@ create table if not exists public.click_events (
   placement text not null
 );
 
+create table if not exists public.duel_choice_events (
+  id uuid primary key,
+  created_at timestamptz not null default now(),
+  recommendation_event_id uuid,
+  marketplace text not null,
+  brief text not null,
+  winner_product_id text not null,
+  loser_product_id text not null
+);
+
 create index if not exists merchant_offers_product_id_idx on public.merchant_offers(product_id);
 create index if not exists merchant_offers_marketplace_idx on public.merchant_offers(marketplace);
 create index if not exists merchant_offers_availability_idx on public.merchant_offers(availability);
@@ -62,11 +72,14 @@ create index if not exists click_events_created_at_idx on public.click_events(cr
 create index if not exists click_events_product_id_idx on public.click_events(product_id);
 create index if not exists click_events_offer_id_idx on public.click_events(offer_id);
 create index if not exists click_events_marketplace_idx on public.click_events(marketplace);
+create index if not exists duel_choice_events_created_at_idx on public.duel_choice_events(created_at desc);
+create index if not exists duel_choice_events_winner_product_id_idx on public.duel_choice_events(winner_product_id);
 
 alter table public.products enable row level security;
 alter table public.merchant_offers enable row level security;
 alter table public.recommendation_events enable row level security;
 alter table public.click_events enable row level security;
+alter table public.duel_choice_events enable row level security;
 
 drop policy if exists "Public can read active products" on public.products;
 create policy "Public can read active products"
@@ -91,3 +104,15 @@ create policy "Anyone can insert click events"
   on public.click_events for insert
   to anon
   with check (true);
+
+drop policy if exists "Anyone can insert duel choice events" on public.duel_choice_events;
+create policy "Anyone can insert duel choice events"
+  on public.duel_choice_events for insert
+  to anon
+  with check (
+    marketplace in ('US', 'CA')
+    and char_length(brief) <= 500
+    and winner_product_id <> ''
+    and loser_product_id <> ''
+    and winner_product_id <> loser_product_id
+  );

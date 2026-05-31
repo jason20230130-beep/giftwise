@@ -1,5 +1,6 @@
 export type Marketplace = "US" | "CA";
 export type CatalogSource = "manual" | "ebay" | "amazon" | "awin";
+export type GiftMode = "thoughtful" | "wildcard" | "duel";
 
 export type Option = {
   value: string;
@@ -47,16 +48,10 @@ export type Catalog = {
 };
 
 export type FinderInputs = {
-  recipient: string;
-  relationship: string;
-  occasion: string;
-  ageRange: string;
-  budget: number;
+  brief: string;
+  mode: GiftMode;
   marketplace: Marketplace;
-  timing: string;
-  interests: string[];
-  styles: string[];
-  avoidances: string[];
+  excludedProductIds?: string[];
 };
 
 export type Recommendation = {
@@ -90,4 +85,14 @@ export type ClickEvent = {
   merchant: string | null;
   marketplace: Marketplace;
   placement: "recommendation-card";
+};
+
+export type DuelChoiceEvent = {
+  id: string;
+  createdAt: string;
+  recommendationEventId: string | null;
+  marketplace: Marketplace;
+  brief: string;
+  winnerProductId: string;
+  loserProductId: string;
 };
