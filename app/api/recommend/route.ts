@@ -3,7 +3,7 @@ import { fetchCatalogForMarketplace } from "@/lib/catalog";
 import { isMarketplace, marketplaceFromRequest } from "@/lib/marketplace";
 import { primaryOffer } from "@/lib/recommendations";
 import { createStructuredResponse } from "@/lib/openai";
-import type { FinderInputs, GiftMode, Marketplace, Recommendation } from "@/lib/types";
+import type { FinderInputs, GiftMode, Marketplace, MerchantOffer, Product, Recommendation } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -59,6 +59,29 @@ function recommendationSchema(resultCount: number) {
   };
 }
 
+function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: FinderInputs) {
+  const query = [
+    inputs.brief,
+    ...Object.values(inputs.answers || {}).map(String)
+  ].join(" ").toLowerCase();
+  const tokens = [...new Set(query.split(/[^a-z0-9]+/).filter((token) => token.length > 2))];
+  const searchableText = [
+    product.name,
+    product.brand,
+    product.category,
+    product.reason,
+    ...Object.keys(product.tags || {})
+  ].join(" ").toLowerCase();
+  const budget = inputs.answers?.budget;
+  let score = product.status === "featured" ? 0.75 : 0;
+  tokens.forEach((token) => {
+    if (searchableText.includes(token)) score += 1;
+  });
+  if (budget && offer.price <= budget) score += 0.5;
+  if (budget && offer.price > budget * 1.5) score -= 0.5;
+  return score;
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -76,6 +99,7 @@ export async function POST(request: Request) {
     .filter((product) => !excludedIds.has(product.id))
     .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace, catalog) }))
     .filter((item) => item.offer)
+    .sort((a, b) => candidateRecallScore(b.product, b.offer!, inputs) - candidateRecallScore(a.product, a.offer!, inputs))
     .slice(0, 80);
 
   if (!candidates.length) {

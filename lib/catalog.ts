@@ -33,6 +33,42 @@ export const fallbackCatalog: Catalog = {
   merchantOffers: fallbackOffers
 };
 
+const catalogPageSize = 1000;
+
+async function fetchProductRows() {
+  const supabase = getSupabaseBrowserClient();
+  const rows: ProductRow[] = [];
+
+  for (let from = 0; ; from += catalogPageSize) {
+    const { data, error } = await supabase
+      .from("products")
+      .select("id,name,brand,category,status,image_url,reason,tags,signals")
+      .in("status", ["active", "featured"])
+      .order("id")
+      .range(from, from + catalogPageSize - 1);
+    if (error) return { rows: [], error };
+    rows.push(...(data as ProductRow[]));
+    if (!data || data.length < catalogPageSize) return { rows, error: null };
+  }
+}
+
+async function fetchOfferRows() {
+  const supabase = getSupabaseBrowserClient();
+  const rows: OfferRow[] = [];
+
+  for (let from = 0; ; from += catalogPageSize) {
+    const { data, error } = await supabase
+      .from("merchant_offers")
+      .select("id,product_id,merchant,marketplace,external_product_id,price,currency,availability,affiliate_url,commission_rate,last_synced_at")
+      .eq("availability", "in_stock")
+      .order("id")
+      .range(from, from + catalogPageSize - 1);
+    if (error) return { rows: [], error };
+    rows.push(...(data as OfferRow[]));
+    if (!data || data.length < catalogPageSize) return { rows, error: null };
+  }
+}
+
 function mapProduct(row: ProductRow): Product {
   return {
     id: row.id,
@@ -64,22 +100,20 @@ function mapOffer(row: OfferRow): MerchantOffer {
 }
 
 export async function fetchCatalog(): Promise<Catalog> {
-  const supabase = getSupabaseBrowserClient();
-
-  const [{ data: productRows, error: productError }, { data: offerRows, error: offerError }] = await Promise.all([
-    supabase.from("products").select("id,name,brand,category,status,image_url,reason,tags,signals").in("status", ["active", "featured"]),
-    supabase.from("merchant_offers").select("id,product_id,merchant,marketplace,external_product_id,price,currency,availability,affiliate_url,commission_rate,last_synced_at").eq("availability", "in_stock")
+  const [{ rows: productRows, error: productError }, { rows: offerRows, error: offerError }] = await Promise.all([
+    fetchProductRows(),
+    fetchOfferRows()
   ]);
 
-  if (productError || offerError || !productRows?.length || !offerRows?.length) {
+  if (productError || offerError || !productRows.length || !offerRows.length) {
     if (productError) console.warn("Supabase products fetch failed", productError.message);
     if (offerError) console.warn("Supabase offers fetch failed", offerError.message);
     return fallbackCatalog;
   }
 
   return {
-    products: (productRows as ProductRow[]).map(mapProduct),
-    merchantOffers: (offerRows as OfferRow[]).map(mapOffer)
+    products: productRows.map(mapProduct),
+    merchantOffers: offerRows.map(mapOffer)
   };
 }
 
