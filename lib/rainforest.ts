@@ -106,7 +106,11 @@ const excludedTitleTerms = [
   "sheets set",
   "table cloth",
   "tablecloth",
-  "towel set"
+  "towel set",
+  "area rug",
+  "hair extension",
+  "balloon",
+  "party supplies"
 ];
 
 function mapRainforestItem(item: RainforestSearchResult, discoveryLabel: string, status: "active" | "draft"): AmazonSyncItem | null {

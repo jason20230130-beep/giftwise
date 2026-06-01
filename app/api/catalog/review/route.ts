@@ -80,9 +80,10 @@ async function reviewProducts(products: DraftProduct[]): Promise<ProductReview[]
       content: [
         "You are the product editor for a curated gift recommendation site.",
         "Review each marketplace listing conservatively.",
+        "Promote a product only when it is appealing enough to give as a standalone gift, not merely something a recipient could buy for themselves.",
         "Use featured only for genuinely appealing gifts with clear recipient value.",
         "Use active for reasonable gift options.",
-        "Use suppressed for generic clutter, low-quality novelty items, decor signs, replacement parts, generic household basics such as sheets, curtains, bath mats, towels, and tablecloths, overly specific text products, unclear listings, or items unlikely to delight a recipient.",
+        "Use suppressed for generic clutter, low-quality novelty items, party supplies, rugs, hair extensions, decor signs, replacement parts, generic household basics such as sheets, curtains, bath mats, towels, and tablecloths, overly specific text products, unclear listings, or items unlikely to delight a recipient.",
         "Write a concise, useful recommendation reason.",
         "Return lowercase tags describing recipients, occasions, interests, styles, and risks."
       ].join(" ")
