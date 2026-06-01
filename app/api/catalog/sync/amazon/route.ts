@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { defaultAmazonQueries, discoverAmazonItems, isRainforestConfigured } from "@/lib/rainforest";
+import {
+  defaultAmazonLists,
+  defaultAmazonQueries,
+  discoverAmazonItems,
+  discoverAmazonListItems,
+  isRainforestConfigured
+} from "@/lib/rainforest";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -24,16 +30,20 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
-    const queryStart = Math.min(Math.max(Number(searchParams.get("queryStart") || 0), 0), defaultAmazonQueries.length);
-    const queryCount = Math.min(Math.max(Number(searchParams.get("queryCount") || 1), 1), 5);
+    const mode = searchParams.get("mode") === "search" ? "search" : "lists";
+    const sources = mode === "search" ? defaultAmazonQueries : defaultAmazonLists;
+    const start = Math.min(Math.max(Number(searchParams.get("start") || 0), 0), sources.length);
+    const count = Math.min(Math.max(Number(searchParams.get("count") || 1), 1), 5);
     const page = Math.min(Math.max(Number(searchParams.get("page") || 1), 1), 10);
-    const resultLimit = Math.min(Math.max(Number(searchParams.get("resultLimit") || 10), 1), 20);
-    const queries = defaultAmazonQueries.slice(queryStart, queryStart + queryCount);
+    const resultLimit = Math.min(Math.max(Number(searchParams.get("resultLimit") || 20), 1), 50);
+    const selectedSources = sources.slice(start, start + count);
     let discovered = 0;
     let newProducts = 0;
 
-    for (const query of queries) {
-      const items = await discoverAmazonItems(query, page, resultLimit);
+    for (let index = start; index < start + selectedSources.length; index += 1) {
+      const items = mode === "search"
+        ? await discoverAmazonItems(defaultAmazonQueries[index], page, resultLimit)
+        : await discoverAmazonListItems(defaultAmazonLists[index].label, defaultAmazonLists[index].url, page, resultLimit);
       discovered += items.length;
       if (!items.length) continue;
       const productIds = items.map((item) => item.product.id);
@@ -54,8 +64,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       configured: true,
-      queryStart,
-      queryCount: queries.length,
+      mode,
+      start,
+      count: selectedSources.length,
       page,
       resultLimit,
       discovered,
