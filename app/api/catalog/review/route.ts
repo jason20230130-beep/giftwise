@@ -116,7 +116,7 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
     const limit = Math.min(Math.max(Number(searchParams.get("limit") || 20), 1), 20);
-    const batches = Math.min(Math.max(Number(searchParams.get("batches") || 3), 1), 3);
+    const batches = Math.min(Math.max(Number(searchParams.get("batches") || 5), 1), 5);
     let updated = 0;
     const statuses = { active: 0, featured: 0, suppressed: 0 };
 
