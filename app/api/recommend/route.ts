@@ -81,7 +81,7 @@ function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: Fi
   tokens.forEach((token) => {
     if (searchableText.includes(token)) score += 1;
   });
-  if (budget && offer.price <= budget) score += 0.5;
+  if (budget && offer.price > 0 && offer.price <= budget) score += 0.5;
   if (budget && offer.price > budget * 1.5) score -= 0.5;
   return score;
 }
@@ -117,10 +117,9 @@ export async function POST(request: Request) {
     name: product.name,
     brand: product.brand,
     category: product.category,
-    price: offer!.price,
-    currency: offer!.currency,
     marketplace: offer!.marketplace,
-    tags: product.tags
+    tags: product.tags,
+    ...(offer!.price > 0 ? { price: offer!.price, currency: offer!.currency } : {})
   }));
 
   try {

@@ -12,6 +12,7 @@ type ProductRow = {
   reason: string;
   tags: Record<string, number>;
   signals: Product["signals"];
+  source: Product["source"];
 };
 
 type OfferRow = {
@@ -26,6 +27,7 @@ type OfferRow = {
   affiliate_url: string;
   commission_rate: number | null;
   last_synced_at: string | null;
+  source: MerchantOffer["source"];
 };
 
 export const fallbackCatalog: Catalog = {
@@ -42,7 +44,7 @@ async function fetchProductRows() {
   for (let from = 0; ; from += catalogPageSize) {
     const { data, error } = await supabase
       .from("products")
-      .select("id,name,brand,category,status,image_url,reason,tags,signals")
+      .select("id,name,brand,category,status,image_url,reason,tags,signals,source")
       .in("status", ["active", "featured"])
       .order("id")
       .range(from, from + catalogPageSize - 1);
@@ -59,7 +61,7 @@ async function fetchOfferRows() {
   for (let from = 0; ; from += catalogPageSize) {
     const { data, error } = await supabase
       .from("merchant_offers")
-      .select("id,product_id,merchant,marketplace,external_product_id,price,currency,availability,affiliate_url,commission_rate,last_synced_at")
+      .select("id,product_id,merchant,marketplace,external_product_id,price,currency,availability,affiliate_url,commission_rate,last_synced_at,source")
       .eq("availability", "in_stock")
       .order("id")
       .range(from, from + catalogPageSize - 1);
@@ -79,7 +81,8 @@ function mapProduct(row: ProductRow): Product {
     image: row.image_url,
     reason: row.reason,
     tags: row.tags || {},
-    signals: row.signals || { clicks: 0, saves: 0, recommendations: 0, freshness: 1 }
+    signals: row.signals || { clicks: 0, saves: 0, recommendations: 0, freshness: 1 },
+    source: row.source
   };
 }
 
@@ -95,7 +98,8 @@ function mapOffer(row: OfferRow): MerchantOffer {
     availability: row.availability,
     affiliateUrl: row.affiliate_url,
     commissionRate: row.commission_rate,
-    lastSyncedAt: row.last_synced_at
+    lastSyncedAt: row.last_synced_at,
+    source: row.source
   };
 }
 
@@ -120,7 +124,7 @@ export async function fetchCatalog(): Promise<Catalog> {
 export async function fetchCatalogForMarketplace(marketplace: Marketplace): Promise<Catalog> {
   const catalog = await fetchCatalog();
   const merchantOffers = catalog.merchantOffers.filter((offer) => (
-    offer.marketplace === marketplace
+    (offer.marketplace === marketplace || (offer.source === "amazon" && offer.marketplace === "US"))
     && offer.availability === "in_stock"
     && Boolean(offer.affiliateUrl)
   ));

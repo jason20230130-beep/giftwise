@@ -22,6 +22,7 @@ export function inferMarketplace(): Marketplace {
 export function primaryOffer(product: Product, marketplace: Marketplace = "US", catalog: Catalog = fallbackCatalog): MerchantOffer | null {
   const offers = offersByProductId(catalog)[product.id] || [];
   return offers.find((offer) => offer.marketplace === marketplace && offer.availability === "in_stock")
+    || offers.find((offer) => offer.source === "amazon" && offer.marketplace === "US" && offer.availability === "in_stock")
     || null;
 }
 

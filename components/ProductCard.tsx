@@ -50,7 +50,7 @@ export function ProductCard({ item, index, isWinner = false, isLoser = false, on
             onClick={() => onClickOffer(product.id, offer.id)}
           >
             <span>{isWinner ? "Winner - view on" : "View on"} {offer.merchant}</span>
-            <strong>{money(offer.price, offer.currency)} &rarr;</strong>
+            <strong>{offer.source === "amazon" ? "View details" : money(offer.price, offer.currency)} &rarr;</strong>
           </a>
         )}
       </div>
