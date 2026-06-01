@@ -74,7 +74,6 @@ function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: Fi
     product.name,
     product.brand,
     product.category,
-    product.reason,
     ...Object.keys(product.tags || {})
   ].join(" ").toLowerCase();
   const budget = inputs.answers?.budget;
@@ -121,8 +120,7 @@ export async function POST(request: Request) {
     price: offer!.price,
     currency: offer!.currency,
     marketplace: offer!.marketplace,
-    tags: product.tags,
-    baselineReason: product.reason
+    tags: product.tags
   }));
 
   try {
@@ -178,8 +176,8 @@ export async function POST(request: Request) {
         product,
         offer,
         score: 0.5,
-        personalizedReason: product.reason,
-        caution: ""
+        personalizedReason: `${product.name} is a ${product.category || "gift"} option that matches the available catalog.`,
+        caution: "Review the listing details before purchasing."
       });
     });
     return NextResponse.json({ marketplace: inputs.marketplace, profileSummary: parsed.profileSummary, recommendations });
