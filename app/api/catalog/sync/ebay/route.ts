@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { Marketplace } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -24,14 +25,20 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseAdminClient();
     const accessToken = await getEbayAccessToken();
+    const { searchParams } = new URL(request.url);
+    const queryStart = Math.min(Math.max(Number(searchParams.get("queryStart") || 0), 0), defaultEbayQueries.length);
+    const queryCount = Math.min(Math.max(Number(searchParams.get("queryCount") || defaultEbayQueries.length), 1), defaultEbayQueries.length);
+    const page = Math.min(Math.max(Number(searchParams.get("page") || 0), 0), 9);
+    const pageSize = 40;
+    const queries = defaultEbayQueries.slice(queryStart, queryStart + queryCount);
     const marketplaces: Marketplace[] = ["US", "CA"];
     let discovered = 0;
     let newProducts = 0;
     let updatedOffers = 0;
 
     for (const marketplace of marketplaces) {
-      for (const query of defaultEbayQueries) {
-        const items = await discoverEbayItems(query, marketplace, 40, accessToken);
+      for (const query of queries) {
+        const items = await discoverEbayItems(query, marketplace, pageSize, accessToken, page * pageSize);
         discovered += items.length;
         if (!items.length) continue;
         const productIds = items.map((item) => item.product.id);
@@ -52,7 +59,15 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ configured: true, discovered, newProducts, updatedOffers });
+    return NextResponse.json({
+      configured: true,
+      queryStart,
+      queryCount: queries.length,
+      page,
+      discovered,
+      newProducts,
+      updatedOffers
+    });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Unknown sync error.";
     console.error("eBay catalog sync failed", message);

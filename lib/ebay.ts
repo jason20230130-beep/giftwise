@@ -75,7 +75,55 @@ export const defaultEbayQueries = [
   "graduation gift",
   "gifts under 25",
   "gifts under 50",
-  "gifts under 100"
+  "gifts under 100",
+  "self care gift",
+  "gardening gift",
+  "baking gift",
+  "camping gift",
+  "hiking gift",
+  "travel gift",
+  "photography gift",
+  "music lover gift",
+  "book lover gift",
+  "tea lover gift",
+  "wine lover gift",
+  "home office gift",
+  "desk gift",
+  "hostess gift",
+  "new home gift",
+  "new job gift",
+  "retirement gift",
+  "baby shower gift",
+  "wedding gift",
+  "bridal shower gift",
+  "birthday gift for her",
+  "birthday gift for him",
+  "gift for grandma",
+  "gift for grandpa",
+  "gift for sister",
+  "gift for brother",
+  "gift for daughter",
+  "gift for son",
+  "gift for wife",
+  "gift for husband",
+  "gift for nurse",
+  "gift for gamer",
+  "gift for artist",
+  "gift for traveler",
+  "gift for gardener",
+  "gift for baker",
+  "gift for cyclist",
+  "gift for runner",
+  "gift for dog lover",
+  "gift for cat lover",
+  "relaxation gift",
+  "cozy gift",
+  "kitchen gift",
+  "home decor gift",
+  "craft gift",
+  "journal gift",
+  "board game gift",
+  "fitness gift"
 ];
 
 function requiredEbayConfig() {
@@ -155,11 +203,11 @@ function mapEbayItem(item: EbaySearchItem, marketplace: Marketplace): EbaySyncIt
   };
 }
 
-export async function discoverEbayItems(query: string, marketplace: Marketplace, limit = 30, accessToken?: string) {
+export async function discoverEbayItems(query: string, marketplace: Marketplace, limit = 30, accessToken?: string, offset = 0) {
   const config = requiredEbayConfig();
   if (!config) throw new Error("eBay credentials are not configured.");
   const token = accessToken || await getEbayAccessToken();
-  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const params = new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) });
   const response = await fetch(`https://api.ebay.com/buy/browse/v1/item_summary/search?${params}`, {
     headers: {
       Authorization: `Bearer ${token}`,
