@@ -1,6 +1,6 @@
 export type Marketplace = "US" | "CA";
 export type CatalogSource = "manual" | "ebay" | "amazon" | "awin";
-export type GiftMode = "thoughtful" | "wildcard" | "duel";
+export type GiftMode = "dna" | "badly" | "panic" | "duel";
 
 export type Option = {
   value: string;
@@ -51,6 +51,13 @@ export type FinderInputs = {
   brief: string;
   mode: GiftMode;
   marketplace: Marketplace;
+  answers?: {
+    recipient?: string;
+    personality?: string;
+    interest?: string;
+    occasion?: string;
+    budget?: number;
+  };
   excludedProductIds?: string[];
 };
 

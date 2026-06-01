@@ -16,15 +16,17 @@ type AiRecommendation = {
 };
 
 type AiPayload = {
+  profileSummary: string;
   recommendations: AiRecommendation[];
 };
 
 function normalizeInputs(value: Partial<FinderInputs>): FinderInputs {
-  const mode: GiftMode = value.mode === "wildcard" || value.mode === "duel" ? value.mode : "thoughtful";
+  const mode: GiftMode = value.mode === "badly" || value.mode === "panic" || value.mode === "duel" ? value.mode : "dna";
   return {
     brief: String(value.brief || "").trim(),
     mode,
     marketplace: isMarketplace(value.marketplace) ? value.marketplace : "US",
+    answers: value.answers || {},
     excludedProductIds: Array.isArray(value.excludedProductIds) ? value.excludedProductIds.map(String).slice(0, 12) : []
   };
 }
@@ -33,8 +35,9 @@ function recommendationSchema(resultCount: number) {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["recommendations"],
+    required: ["profileSummary", "recommendations"],
     properties: {
+      profileSummary: { type: "string" },
       recommendations: {
         type: "array",
         minItems: resultCount,
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
   const inputs = normalizeInputs(body.inputs || {});
   inputs.marketplace = marketplaceFromRequest(request, inputs.marketplace);
   const catalog = await fetchCatalogForMarketplace(inputs.marketplace);
-  const resultCount = inputs.mode === "duel" ? 2 : inputs.mode === "wildcard" ? 3 : 5;
+  const resultCount = inputs.mode === "dna" ? 5 : inputs.mode === "duel" ? 2 : 3;
   const excludedIds = new Set(inputs.excludedProductIds || []);
 
   const candidates = catalog.products
@@ -100,11 +103,13 @@ export async function POST(request: Request) {
             "You are Giftwise, a sharp and warm gift advisor.",
             "Select only from the provided candidate products. Never invent products, offer IDs, prices, links, or merchants.",
             "Infer useful details from the user's natural-language brief. If it is sparse, choose broadly appealing gifts rather than asking questions.",
-            inputs.mode === "wildcard"
-              ? "Choose surprising but still genuinely giftable products. Avoid the most obvious safe choices."
+            inputs.mode === "badly"
+              ? "Translate the user's rough description into a witty but kind one-sentence profile summary, then choose three fitting gifts."
+              : inputs.mode === "panic"
+                ? "Choose three low-risk, easy-to-buy gifts quickly. Favor broad appeal and avoid fragile, overly personal, or sizing-dependent ideas."
               : inputs.mode === "duel"
                 ? "Choose exactly two strong products with clearly different personalities so the user faces an interesting choice."
-                : "Choose the most thoughtful, practical shortlist for the user's brief.",
+                : "Use the answers and optional brief to choose a thoughtful five-gift shortlist. Write a concise profile summary.",
             "Return concise reasons that feel personal and useful, not salesy."
           ].join(" ")
         },
@@ -130,7 +135,7 @@ export async function POST(request: Request) {
         caution: item.caution
       });
     });
-    return NextResponse.json({ marketplace: inputs.marketplace, recommendations });
+    return NextResponse.json({ marketplace: inputs.marketplace, profileSummary: parsed.profileSummary, recommendations });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Unknown recommendation error.";
     return NextResponse.json({ error: message }, { status: 502 });

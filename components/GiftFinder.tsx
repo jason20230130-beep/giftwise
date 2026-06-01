@@ -1,235 +1,476 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { fallbackCatalog, fetchCatalog } from "@/lib/catalog";
 import {
-  readClickEvents,
-  readClicks,
-  readRecommendationEvents,
-  recordClick,
-  recordDuelChoice,
-  recordRecommendation,
-  saveClickEvent,
-  saveDuelChoiceEvent,
-  saveRecommendationEvent
-} from "@/lib/analytics";
-import { inferMarketplace } from "@/lib/recommendations";
-import type { Catalog, ClickEvent, DuelChoiceEvent, FinderInputs, GiftMode, Marketplace, Recommendation, RecommendationEvent } from "@/lib/types";
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Briefcase,
+  Calendar as CalendarBlank,
+  CircleHelp as Question,
+  Coffee,
+  CookingPot,
+  Dna as Fingerprint,
+  Gift,
+  GraduationCap,
+  Headphones,
+  Heart,
+  House,
+  Lock as LockSimple,
+  Mountain as Mountains,
+  Sparkles as Sparkle,
+  Store as Storefront,
+  User,
+  Users as UsersThree,
+  Zap as Lightning,
+} from "lucide-react";
+import { ElementType, useEffect, useMemo, useState } from "react";
 import { DevMetrics } from "./DevMetrics";
 import { ProductCard } from "./ProductCard";
+import { fallbackCatalog, fetchCatalog } from "../lib/catalog";
+import {
+  readClickEvents,
+  readRecommendationEvents,
+  recordClick,
+  recordRecommendation,
+  saveClickEvent,
+  saveRecommendationEvent,
+} from "../lib/analytics";
+import { inferMarketplace } from "../lib/recommendations";
+import type { Catalog, ClickEvent, FinderInputs, GiftMode, Marketplace, Recommendation, RecommendationEvent } from "../lib/types";
 
-const modes: Array<{ id: GiftMode; label: string; kicker: string; placeholder: string; button: string }> = [
-  {
-    id: "thoughtful",
-    label: "Thoughtful Pick",
-    kicker: "A considered shortlist",
-    placeholder: "A birthday gift for my dad who is hard to shop for...",
-    button: "Find thoughtful gifts"
-  },
-  {
-    id: "wildcard",
-    label: "Wildcard",
-    kicker: "A little less predictable",
-    placeholder: "Surprise my coffee-obsessed coworker without being boring...",
-    button: "Surprise me"
-  },
-  {
-    id: "duel",
-    label: "Gift Duel",
-    kicker: "Two gifts enter. One gift leaves.",
-    placeholder: "Help me choose a housewarming gift for my stylish friend...",
-    button: "Start a duel"
-  }
+type AnswerKey = "recipient" | "personality" | "interest" | "occasion";
+type Answers = NonNullable<FinderInputs["answers"]>;
+
+type Choice = {
+  value: string;
+  label: string;
+  icon: ElementType;
+};
+
+type Step = {
+  key: AnswerKey;
+  shortLabel: string;
+  question: string;
+  helper: string;
+  choices: Choice[];
+};
+
+const recipients: Choice[] = [
+  { value: "mom", label: "Mom", icon: Heart },
+  { value: "dad", label: "Dad", icon: User },
+  { value: "partner", label: "Partner", icon: Sparkle },
+  { value: "friend", label: "Friend", icon: UsersThree },
+  { value: "coworker", label: "Coworker", icon: Briefcase },
+  { value: "teen", label: "Teen", icon: Headphones },
 ];
 
+const personalities: Choice[] = [
+  { value: "cozy-homebody", label: "Cozy homebody", icon: House },
+  { value: "coffee-person", label: "Coffee person", icon: Coffee },
+  { value: "always-outdoors", label: "Always outdoors", icon: Mountains },
+  { value: "tech-curious", label: "Tech curious", icon: Headphones },
+  { value: "the-host", label: "The host", icon: CookingPot },
+  { value: "hard-to-shop-for", label: "Hard to shop for", icon: Question },
+];
+
+const interests: Choice[] = [
+  { value: "cooking", label: "Cooking", icon: CookingPot },
+  { value: "wellness", label: "Wellness", icon: Heart },
+  { value: "reading", label: "Reading", icon: BookOpen },
+  { value: "style", label: "Style", icon: Sparkle },
+  { value: "home", label: "Home", icon: House },
+  { value: "surprise-me", label: "Surprise me", icon: Gift },
+];
+
+const occasions: Choice[] = [
+  { value: "birthday", label: "Birthday", icon: Gift },
+  { value: "thank-you", label: "Thank you", icon: Heart },
+  { value: "housewarming", label: "Housewarming", icon: House },
+  { value: "graduation", label: "Graduation", icon: GraduationCap },
+  { value: "holiday", label: "Holiday", icon: Sparkle },
+  { value: "just-because", label: "Just because", icon: CalendarBlank },
+];
+
+const dnaSteps: Step[] = [
+  {
+    key: "recipient",
+    shortLabel: "Person",
+    question: "Who is this for?",
+    helper: "Start with the relationship that fits best.",
+    choices: recipients,
+  },
+  {
+    key: "personality",
+    shortLabel: "Personality",
+    question: "What are they like?",
+    helper: "Pick the one that feels most like them.",
+    choices: personalities,
+  },
+  {
+    key: "interest",
+    shortLabel: "Interests",
+    question: "What lights them up?",
+    helper: "One good clue is enough for the AI to start.",
+    choices: interests,
+  },
+  {
+    key: "occasion",
+    shortLabel: "Moment",
+    question: "What is the occasion?",
+    helper: "The moment changes what makes a gift feel right.",
+    choices: occasions,
+  },
+];
+
+const budgets = [25, 50, 100, 200];
+
+function getProfileScores(answers: Answers) {
+  let practical = 30;
+  let curious = 24;
+  let particular = 22;
+  const values = Object.values(answers);
+
+  if (values.some((value) => ["dad", "coworker", "cooking", "home", "the-host"].includes(String(value)))) practical += 34;
+  if (values.some((value) => ["teen", "friend", "tech-curious", "reading", "surprise-me"].includes(String(value)))) curious += 38;
+  if (values.some((value) => ["partner", "mom", "style", "hard-to-shop-for"].includes(String(value)))) particular += 40;
+  if (answers.personality === "always-outdoors") {
+    practical += 18;
+    curious += 12;
+  }
+
+  return {
+    practical: Math.min(practical, 92),
+    curious: Math.min(curious, 92),
+    particular: Math.min(particular, 92),
+  };
+}
+
 export function GiftFinder() {
+  const [mode, setMode] = useState<Exclude<GiftMode, "duel">>("dna");
+  const [stepIndex, setStepIndex] = useState(0);
   const [brief, setBrief] = useState("");
-  const [mode, setMode] = useState<GiftMode>("thoughtful");
+  const [answers, setAnswers] = useState<Answers>({ budget: 50 });
   const [marketplace, setMarketplace] = useState<Marketplace>("US");
   const [results, setResults] = useState<Recommendation[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [profileSummary, setProfileSummary] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [clicks, setClicks] = useState<Record<string, number>>({});
   const [catalog, setCatalog] = useState<Catalog>(fallbackCatalog);
   const [recommendationEvents, setRecommendationEvents] = useState<RecommendationEvent[]>([]);
   const [clickEvents, setClickEvents] = useState<ClickEvent[]>([]);
-  const [latestRecommendationEventId, setLatestRecommendationEventId] = useState<string | null>(null);
-  const [duelWinnerId, setDuelWinnerId] = useState<string | null>(null);
+
+  const currentStep = dnaSteps[stepIndex];
+  const profileScores = useMemo(() => getProfileScores(answers), [answers]);
 
   useEffect(() => {
     setMarketplace(inferMarketplace());
-    setClicks(readClicks());
     setRecommendationEvents(readRecommendationEvents());
     setClickEvents(readClickEvents());
     void fetchCatalog().then(setCatalog);
   }, []);
 
-  const activeMode = modes.find((item) => item.id === mode)!;
-  const resultSummary = useMemo(() => {
-    if (mode === "duel") return "Pick the gift you would actually give. There is no wrong answer, but there is a winner.";
-    if (mode === "wildcard") return `${results.length} less-obvious ideas selected from gifts available in your region.`;
-    return `${results.length} gifts selected for the person and moment you described.`;
-  }, [mode, results.length]);
+  function changeMode(nextMode: Exclude<GiftMode, "duel">) {
+    setMode(nextMode);
+    setResults([]);
+    setProfileSummary("");
+    setError("");
+  }
+
+  function choose(key: AnswerKey, value: string) {
+    setAnswers((current) => ({ ...current, [key]: value }));
+  }
+
+  function chooseBudget(value: number) {
+    setAnswers((current) => ({ ...current, budget: value }));
+  }
 
   async function runFinder(excludedProductIds: string[] = []) {
+    setLoading(true);
     setError("");
-    setIsLoading(true);
-    setDuelWinnerId(null);
-    const inputs: FinderInputs = { brief, mode, marketplace, excludedProductIds };
+
     try {
+      const inputs: FinderInputs = { brief, mode, marketplace, answers, excludedProductIds };
       const response = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inputs })
+        body: JSON.stringify({ inputs }),
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "AI recommendation failed.");
-      const items = payload.recommendations as Recommendation[];
-      const resolvedMarketplace = (payload.marketplace as Marketplace | undefined) || marketplace;
-      setMarketplace(resolvedMarketplace);
-      setResults(items);
-      setHasSearched(true);
-      const nextEvents = recordRecommendation({ ...inputs, marketplace: resolvedMarketplace }, items);
+      const data = await response.json();
+
+      if (!response.ok) throw new Error(data.error || "The gift finder could not complete that request.");
+
+      setMarketplace(data.marketplace);
+      setResults(data.recommendations);
+      setProfileSummary(data.profileSummary || "");
+      const nextEvents = recordRecommendation({ ...inputs, marketplace: data.marketplace }, data.recommendations);
       setRecommendationEvents(nextEvents);
       const latestEvent = nextEvents[nextEvents.length - 1];
-      setLatestRecommendationEventId(latestEvent?.id || null);
       if (latestEvent) void saveRecommendationEvent(latestEvent);
     } catch (caught) {
-      setResults([]);
-      setHasSearched(false);
-      setError(caught instanceof Error ? caught.message : "AI recommendation failed.");
+      setError(caught instanceof Error ? caught.message : "The gift finder could not complete that request.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function handleContinue() {
+    if (!answers[currentStep.key]) return;
+    if (stepIndex < dnaSteps.length - 1) {
+      setStepIndex((index) => index + 1);
+      return;
+    }
     void runFinder();
   }
 
-  function handleReroll() {
-    void runFinder(results.map((item) => item.product.id));
-  }
-
-  function handleClickOffer(productId: string, offerId: string) {
+  function handleProductClick(productId: string, offerId: string) {
     const next = recordClick(productId, offerId, marketplace, catalog);
-    setClicks(next.clicks);
     setClickEvents(next.events);
     const latestEvent = next.events[next.events.length - 1];
     if (latestEvent) void saveClickEvent(latestEvent);
   }
 
-  function handleChooseDuel(winnerProductId: string) {
-    const loser = results.find((item) => item.product.id !== winnerProductId);
-    if (!loser || duelWinnerId) return;
-    setDuelWinnerId(winnerProductId);
-    const event: DuelChoiceEvent = {
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      recommendationEventId: latestRecommendationEventId,
-      marketplace,
-      brief,
-      winnerProductId,
-      loserProductId: loser.product.id
-    };
-    recordDuelChoice(event);
-    void saveDuelChoiceEvent(event);
-  }
+  const canSubmitPanic = Boolean(answers.recipient && answers.occasion && answers.budget);
 
   return (
     <>
-      <section className="finder-band" id="finder">
-        <div className="search-shell">
-          <p className="eyebrow">AI gift finder</p>
-          <h1>Find a gift with a little <em>instinct.</em></h1>
-          <p className="intro">Describe the person, the occasion, or the problem. Giftwise will take it from there.</p>
+      <section className="finder-hero">
+        <p className="eyebrow">AI-curated gifts, matched to their world</p>
+        <h1>Let&apos;s find a gift<br />they&apos;ll actually remember.</h1>
+        <p>Answer a few quick questions and get thoughtful, shoppable picks chosen just for them.</p>
+      </section>
 
-          <div className="mode-switcher" aria-label="Gift finder mode">
-            {modes.map((item) => (
-              <button
-                className={`mode-button ${mode === item.id ? "is-active" : ""}`}
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setMode(item.id);
-                  setHasSearched(false);
-                  setResults([]);
-                  setDuelWinnerId(null);
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+      <section className="finder-shell" id="finder" aria-label="Gift finder">
+        <div className="mode-switch" aria-label="Gift finding mode">
+          <button className={mode === "dna" ? "active" : ""} onClick={() => changeMode("dna")} type="button">
+            <Fingerprint size={18} /> Gift DNA
+          </button>
+          <button className={mode === "badly" ? "active" : ""} onClick={() => changeMode("badly")} type="button">
+            <Sparkle size={18} /> Describe them badly
+          </button>
+          <button className={mode === "panic" ? "active" : ""} onClick={() => changeMode("panic")} type="button">
+            <Lightning size={18} /> Panic mode
+          </button>
+        </div>
+
+        <div className="finder-workspace">
+          <div className="question-pane">
+            {mode === "dna" && (
+              <>
+                <div className="step-rail" aria-label="Progress">
+                  {dnaSteps.map((step, index) => (
+                    <button
+                      className={index === stepIndex ? "active" : index < stepIndex ? "done" : ""}
+                      key={step.key}
+                      onClick={() => setStepIndex(index)}
+                      type="button"
+                    >
+                      <span>{String(index + 1).padStart(2, "0")}</span>
+                      {step.shortLabel}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="question-heading">
+                  <span>{String(stepIndex + 1).padStart(2, "0")} / {String(dnaSteps.length).padStart(2, "0")}</span>
+                  <h2>{currentStep.question}</h2>
+                  <p>{currentStep.helper}</p>
+                </div>
+
+                <div className="option-grid">
+                  {currentStep.choices.map(({ value, label, icon: Icon }) => (
+                    <button
+                      className={`option-tile ${answers[currentStep.key] === value ? "active" : ""}`}
+                      key={value}
+                      onClick={() => choose(currentStep.key, value)}
+                      type="button"
+                    >
+                      <Icon size={34} strokeWidth={1.35} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {stepIndex === 0 && (
+                  <label className="brief-field">
+                    <span>One extra clue <em>optional</em></span>
+                    <input
+                      onChange={(event) => setBrief(event.target.value)}
+                      placeholder="She has started making sourdough and loves tiny rituals."
+                      value={brief}
+                    />
+                  </label>
+                )}
+
+                {stepIndex === dnaSteps.length - 1 && (
+                  <BudgetPicker value={answers.budget || 50} onChange={chooseBudget} />
+                )}
+
+                <div className="question-actions">
+                  <button
+                    aria-label="Previous question"
+                    className="icon-button"
+                    disabled={stepIndex === 0}
+                    onClick={() => setStepIndex((index) => Math.max(0, index - 1))}
+                    type="button"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={!answers[currentStep.key] || loading}
+                    onClick={handleContinue}
+                    type="button"
+                  >
+                    {loading ? "Finding gifts..." : stepIndex === dnaSteps.length - 1 ? "Find their gifts" : "Continue"}
+                    {!loading && <ArrowRight size={19} />}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {mode === "badly" && (
+              <div className="single-mode">
+                <div className="question-heading">
+                  <span>THE UNOFFICIAL BIOGRAPHY</span>
+                  <h2>Describe them badly.</h2>
+                  <p>Be specific, strange, affectionate, or all three. The AI will translate.</p>
+                </div>
+                <textarea
+                  onChange={(event) => setBrief(event.target.value)}
+                  placeholder="Owns six tote bags, distrusts overhead lighting, and gets emotionally attached to mugs."
+                  rows={6}
+                  value={brief}
+                />
+                <BudgetPicker value={answers.budget || 50} onChange={chooseBudget} />
+                <button className="primary-button" disabled={!brief.trim() || loading} onClick={() => void runFinder()} type="button">
+                  {loading ? "Decoding..." : "Decode their gifts"} {!loading && <Sparkle size={18} />}
+                </button>
+              </div>
+            )}
+
+            {mode === "panic" && (
+              <div className="single-mode panic-mode">
+                <div className="question-heading">
+                  <span>NEED A WIN, QUICKLY</span>
+                  <h2>Panic mode.</h2>
+                  <p>Three fast clues. Broad appeal, easy buying, zero spiraling.</p>
+                </div>
+                <CompactChoices label="Who?" choices={recipients} selected={answers.recipient} onChange={(value) => choose("recipient", value)} />
+                <CompactChoices label="Why?" choices={occasions} selected={answers.occasion} onChange={(value) => choose("occasion", value)} />
+                <BudgetPicker value={answers.budget || 50} onChange={chooseBudget} />
+                <button className="primary-button" disabled={!canSubmitPanic || loading} onClick={() => void runFinder()} type="button">
+                  {loading ? "Finding gifts..." : "Save the day"} {!loading && <Lightning size={18} />}
+                </button>
+              </div>
+            )}
           </div>
 
-          <form className="search-form" onSubmit={handleSubmit}>
-            <label className="visually-hidden" htmlFor="giftBrief">Describe the gift you need</label>
-            <textarea
-              id="giftBrief"
-              value={brief}
-              onChange={(event) => setBrief(event.target.value)}
-              placeholder={activeMode.placeholder}
-              maxLength={500}
-              rows={2}
-            />
-            <button className="primary-button" type="submit" disabled={isLoading}>
-              {isLoading ? "Thinking..." : activeMode.button}
-            </button>
-          </form>
-          <p className="search-note">{activeMode.kicker}. Region matched automatically.</p>
-          {error && <p className="form-error">{error}</p>}
+          <aside className="dna-pane">
+            <Fingerprint size={34} strokeWidth={1.35} />
+            <h2>Their Gift DNA</h2>
+            <div className="short-rule" />
+            <DnaTrait icon={Briefcase} label="Practical" score={profileScores.practical} />
+            <DnaTrait icon={Sparkle} label="Curious" score={profileScores.curious} />
+            <DnaTrait icon={Question} label="A little particular" score={profileScores.particular} />
+            <div className="privacy-note">
+              <LockSimple size={17} />
+              <p>Your answers stay private.<br />We only use them to find great gifts.</p>
+            </div>
+          </aside>
         </div>
       </section>
 
-      {hasSearched && (
-        <section className={`results-band results-${mode}`} id="results" aria-live="polite">
-          <div className="section-head">
+      {error && <p className="error-message">{error}</p>}
+
+      {results.length > 0 && (
+        <section className="results-section" aria-live="polite">
+          <div className="results-heading">
             <div>
-              <p className="step-label">{mode === "duel" ? "Choose your champion" : mode === "wildcard" ? "A few wild cards" : "Your shortlist"}</p>
-              <h2>{mode === "duel" ? "Which one wins?" : mode === "wildcard" ? "Unexpected, but not unhinged." : "Worth considering."}</h2>
+              <p className="eyebrow">{marketplace} marketplace matched</p>
+              <h2>{profileSummary || "A few gifts worth giving."}</h2>
             </div>
-            <p>{resultSummary}</p>
+            <button className="secondary-button" onClick={() => void runFinder(results.map((item) => item.product.id))} type="button">
+              <Sparkle size={17} /> Reroll gifts
+            </button>
           </div>
-
-          {mode === "duel" ? (
-            <div className="duel-stage">
-              {results.map((item, index) => (
-                <div className="duel-entry" key={item.product.id}>
-                  {index === 1 && <span className="duel-vs">VS</span>}
-                  <ProductCard
-                    item={item}
-                    index={index}
-                    isWinner={duelWinnerId === item.product.id}
-                    isLoser={Boolean(duelWinnerId && duelWinnerId !== item.product.id)}
-                    onChoose={() => handleChooseDuel(item.product.id)}
-                    onClickOffer={handleClickOffer}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="product-grid" id="recommendations">
-              {results.map((item, index) => (
-                <ProductCard item={item} index={index} key={item.product.id} onClickOffer={handleClickOffer} />
-              ))}
-            </div>
-          )}
-
-          {(mode === "wildcard" || mode === "duel") && (
-            <div className="reroll-row">
-              <button className="secondary-button" type="button" onClick={handleReroll} disabled={isLoading}>
-                {mode === "duel" ? "Start another duel" : "Surprise me again"}
-              </button>
-            </div>
-          )}
+          <div className="product-grid">
+            {results.map((recommendation, index) => (
+              <ProductCard
+                key={recommendation.product.id}
+                index={index}
+                item={recommendation}
+                onClickOffer={handleProductClick}
+              />
+            ))}
+          </div>
         </section>
       )}
 
+      <section className="trust-strip" id="how-it-works">
+        <div><Storefront size={19} /> Region matched</div>
+        <div><Gift size={19} /> Shoppable picks</div>
+        <div><Sparkle size={19} /> AI-curated</div>
+      </section>
+
       {process.env.NODE_ENV === "development" && (
-        <DevMetrics marketplace={marketplace} catalog={catalog} recommendationEvents={recommendationEvents} clickEvents={clickEvents} />
+        <DevMetrics catalog={catalog} clickEvents={clickEvents} marketplace={marketplace} recommendationEvents={recommendationEvents} />
       )}
     </>
+  );
+}
+
+function BudgetPicker({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return (
+    <div className="budget-picker">
+      <span>Budget</span>
+      <div>
+        {budgets.map((budget) => (
+          <button className={value === budget ? "active" : ""} key={budget} onClick={() => onChange(budget)} type="button">
+            ${budget}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompactChoices({
+  label,
+  choices,
+  selected,
+  onChange,
+}: {
+  label: string;
+  choices: Choice[];
+  selected?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="compact-choices">
+      <strong>{label}</strong>
+      <div>
+        {choices.map(({ label: choiceLabel, value }) => (
+          <button className={value === selected ? "active" : ""} key={value} onClick={() => onChange(value)} type="button">
+            {choiceLabel}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DnaTrait({ icon: Icon, label, score }: { icon: ElementType; label: string; score: number }) {
+  return (
+    <div className="dna-trait">
+      <Icon size={25} strokeWidth={1.35} />
+      <div>
+        <strong>{label}</strong>
+        <div className="dna-ruler" aria-label={`${label}: ${score}%`}>
+          {[0, 1, 2, 3, 4, 5].map((tick) => <span key={tick} />)}
+          <i style={{ left: `${score}%` }} />
+        </div>
+        <small>{score > 56 ? "Strong signal" : "Decoding..."}</small>
+      </div>
+    </div>
   );
 }

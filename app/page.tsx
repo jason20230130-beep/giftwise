@@ -1,15 +1,10 @@
 import { GiftFinder } from "@/components/GiftFinder";
+import { SiteHeader } from "@/components/SiteHeader";
 
 export default function Home() {
   return (
     <>
-      <header className="topbar">
-        <a className="brand" href="#finder" aria-label="Giftwise home">
-          <span className="brand-mark">G</span>
-          <span>Giftwise</span>
-        </a>
-        <span className="header-note">AI gift finder</span>
-      </header>
+      <SiteHeader />
 
       <main>
         <GiftFinder />
