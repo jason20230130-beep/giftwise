@@ -20,6 +20,11 @@ type AiPayload = {
   recommendations: AiRecommendation[];
 };
 
+const recallStopwords = new Set([
+  "and", "birthday", "boy", "buy", "easy", "for", "gift", "holiday", "likes", "need",
+  "not", "something", "thank", "that", "the", "too", "who", "with"
+]);
+
 function normalizeInputs(value: Partial<FinderInputs>): FinderInputs {
   const mode: GiftMode = value.mode === "badly" || value.mode === "panic" || value.mode === "duel" ? value.mode : "dna";
   return {
@@ -64,7 +69,7 @@ function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: Fi
     inputs.brief,
     ...Object.values(inputs.answers || {}).map(String)
   ].join(" ").toLowerCase();
-  const tokens = [...new Set(query.split(/[^a-z0-9]+/).filter((token) => token.length > 2))];
+  const tokens = [...new Set(query.split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !recallStopwords.has(token)))];
   const searchableText = [
     product.name,
     product.brand,
@@ -73,7 +78,7 @@ function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: Fi
     ...Object.keys(product.tags || {})
   ].join(" ").toLowerCase();
   const budget = inputs.answers?.budget;
-  let score = product.status === "featured" ? 0.75 : 0;
+  let score = product.status === "featured" ? 0.25 : 0;
   tokens.forEach((token) => {
     if (searchableText.includes(token)) score += 1;
   });
@@ -127,6 +132,10 @@ export async function POST(request: Request) {
           content: [
             "You are Giftwise, a sharp and warm gift advisor.",
             "Select only from the provided candidate products. Never invent products, offer IDs, prices, links, or merchants.",
+            "Before selecting each product, verify that its exact listing name and category clearly fit the recipient. Reject loosely related, confusing, or inappropriate listings.",
+            "Describe only qualities supported by the selected listing name, category, tags, or baseline reason. Do not write a reason for a different product or invent product features.",
+            "Prefer products within the user's budget. Recommend an over-budget product only when it is unusually strong and acknowledge the tradeoff in caution.",
+            "Apply common-sense safety judgment. Do not recommend weapons or hazardous products for minors.",
             "Infer useful details from the user's natural-language brief. If it is sparse, choose broadly appealing gifts rather than asking questions.",
             inputs.mode === "badly"
               ? "Translate the user's rough description into a witty but kind one-sentence profile summary, then choose three fitting gifts."
