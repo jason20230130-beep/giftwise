@@ -81,6 +81,7 @@ export async function POST(request: Request) {
   if (!candidates.length) {
     return NextResponse.json({ marketplace: inputs.marketplace, recommendations: [] });
   }
+  const recommendationCount = Math.min(resultCount, candidates.length);
 
   const candidatePayload = candidates.map(({ product, offer }) => ({
     productId: product.id,
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
   }));
 
   try {
-    const parsed = await createStructuredResponse("gift_recommendations", recommendationSchema(resultCount), [
+    const parsed = await createStructuredResponse("gift_recommendations", recommendationSchema(recommendationCount), [
         {
           role: "system",
           content: [
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: JSON.stringify({
-            task: `Choose exactly ${resultCount} gifts from the candidate catalog.`,
+            task: `Choose exactly ${recommendationCount} gifts from the candidate catalog.`,
             userInputs: inputs,
             candidates: candidatePayload
           })
@@ -124,15 +125,28 @@ export async function POST(request: Request) {
       ]) as AiPayload;
     const candidateByKey = new Map(candidates.map(({ product, offer }) => [`${product.id}:${offer!.id}`, { product, offer: offer! }]));
     const recommendations: Recommendation[] = [];
+    const usedProductIds = new Set<string>();
     parsed.recommendations.forEach((item) => {
       const candidate = candidateByKey.get(`${item.productId}:${item.offerId}`);
-      if (!candidate) return;
+      if (!candidate || usedProductIds.has(candidate.product.id)) return;
+      usedProductIds.add(candidate.product.id);
       recommendations.push({
         product: candidate.product,
         offer: candidate.offer,
         score: item.score,
         personalizedReason: item.reason,
         caution: item.caution
+      });
+    });
+    candidates.forEach(({ product, offer }) => {
+      if (!offer || recommendations.length >= recommendationCount || usedProductIds.has(product.id)) return;
+      usedProductIds.add(product.id);
+      recommendations.push({
+        product,
+        offer,
+        score: 0.5,
+        personalizedReason: product.reason,
+        caution: ""
       });
     });
     return NextResponse.json({ marketplace: inputs.marketplace, profileSummary: parsed.profileSummary, recommendations });
