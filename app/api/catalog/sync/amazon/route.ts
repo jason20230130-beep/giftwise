@@ -55,11 +55,16 @@ export async function GET(request: Request) {
       const existingIds = new Set((existingProducts || []).map((product) => product.id));
       const newItems = items.filter((item) => !existingIds.has(item.product.id));
       if (!newItems.length) continue;
-      const { error: productError } = await supabase.from("products").insert(newItems.map((item) => item.product));
+      const { data: stagedProducts, error: productError } = await supabase
+        .from("products")
+        .upsert(newItems.map((item) => item.product), { onConflict: "id", ignoreDuplicates: true })
+        .select("id");
       if (productError) throw new Error(`Amazon product staging failed: ${productError.message}`);
-      const { error: offerError } = await supabase.from("merchant_offers").insert(newItems.map((item) => item.offer));
+      const { error: offerError } = await supabase
+        .from("merchant_offers")
+        .upsert(newItems.map((item) => item.offer), { onConflict: "id", ignoreDuplicates: true });
       if (offerError) throw new Error(`Amazon offer staging failed: ${offerError.message}`);
-      newProducts += newItems.length;
+      newProducts += stagedProducts?.length || 0;
     }
 
     return NextResponse.json({
