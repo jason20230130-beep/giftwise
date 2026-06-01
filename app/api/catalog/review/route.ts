@@ -3,7 +3,7 @@ import { createStructuredResponse } from "@/lib/openai";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type DraftProduct = {
   id: string;
@@ -116,43 +116,47 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
     const limit = Math.min(Math.max(Number(searchParams.get("limit") || 20), 1), 20);
+    const batches = Math.min(Math.max(Number(searchParams.get("batches") || 3), 1), 3);
     let updated = 0;
     const statuses = { active: 0, featured: 0, suppressed: 0 };
 
-    const { data, error } = await supabase
-      .from("products")
-      .select("id,name,category,source_metadata")
-      .eq("source", "ebay")
-      .eq("status", "draft")
-      .limit(limit);
-    if (error) throw new Error(`Draft fetch failed: ${error.message}`);
-
-    const products = (data || []) as DraftProduct[];
-    const reviews = products.length ? await reviewProducts(products) : [];
-    const productById = new Map(products.map((product) => [product.id, product]));
-    for (const review of reviews) {
-      const product = productById.get(review.productId)!;
-      const reviewedAt = new Date().toISOString();
-      const status = statusFromScore(review.giftQualityScore);
-      const { error: updateError } = await supabase
+    for (let batch = 0; batch < batches; batch += 1) {
+      const { data, error } = await supabase
         .from("products")
-        .update({
-          status,
-          reason: review.reason,
-          tags: normalizeTags(review.tags),
-          source_metadata: {
-            ...product.source_metadata,
-            giftQualityScore: review.giftQualityScore,
-            reviewedAt,
-            reviewedBy: process.env.OPENAI_MODEL || "gpt-4o-mini"
-          },
-          updated_at: reviewedAt
-        })
-        .eq("id", review.productId)
-        .eq("status", "draft");
-      if (updateError) throw new Error(`Product review update failed: ${updateError.message}`);
-      statuses[status] += 1;
-      updated += 1;
+        .select("id,name,category,source_metadata")
+        .eq("source", "ebay")
+        .eq("status", "draft")
+        .limit(limit);
+      if (error) throw new Error(`Draft fetch failed: ${error.message}`);
+
+      const products = (data || []) as DraftProduct[];
+      if (!products.length) break;
+      const reviews = await reviewProducts(products);
+      const productById = new Map(products.map((product) => [product.id, product]));
+      for (const review of reviews) {
+        const product = productById.get(review.productId)!;
+        const reviewedAt = new Date().toISOString();
+        const status = statusFromScore(review.giftQualityScore);
+        const { error: updateError } = await supabase
+          .from("products")
+          .update({
+            status,
+            reason: review.reason,
+            tags: normalizeTags(review.tags),
+            source_metadata: {
+              ...product.source_metadata,
+              giftQualityScore: review.giftQualityScore,
+              reviewedAt,
+              reviewedBy: process.env.OPENAI_MODEL || "gpt-4o-mini"
+            },
+            updated_at: reviewedAt
+          })
+          .eq("id", review.productId)
+          .eq("status", "draft");
+        if (updateError) throw new Error(`Product review update failed: ${updateError.message}`);
+        statuses[status] += 1;
+        updated += 1;
+      }
     }
 
     const { count, error: countError } = await supabase
