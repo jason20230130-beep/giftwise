@@ -98,7 +98,15 @@ const excludedTitleTerms = [
   "compatible with",
   "accessory only",
   "spare part",
-  "filter cartridge"
+  "filter cartridge",
+  "blackout curtain",
+  "bathroom rug",
+  "bath mat",
+  "sheet set",
+  "sheets set",
+  "table cloth",
+  "tablecloth",
+  "towel set"
 ];
 
 function mapRainforestItem(item: RainforestSearchResult, discoveryLabel: string, status: "active" | "draft"): AmazonSyncItem | null {
@@ -182,7 +190,7 @@ export async function discoverAmazonListItems(label: string, url: string, page =
   if (!response.ok) throw new Error(`Rainforest API failed: ${response.status}`);
   const payload = await response.json() as RainforestSearchResponse;
   return (payload.bestsellers || [])
-    .map((item) => mapRainforestItem(item, label, "active"))
+    .map((item) => mapRainforestItem(item, label, "draft"))
     .filter((item): item is AmazonSyncItem => item !== null)
     .slice(0, resultLimit);
 }
