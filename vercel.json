@@ -1,12 +1,3 @@
 {
-  "crons": [
-    {
-      "path": "/api/catalog/sync/ebay",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/catalog/review",
-      "schedule": "30 8 * * *"
-    }
-  ]
+  "crons": []
 }
