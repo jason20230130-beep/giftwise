@@ -7,7 +7,7 @@ export type Option = {
   label: string;
 };
 
-export type ProductStatus = "draft" | "active" | "featured" | "suppressed" | "archived";
+export type ProductStatus = "draft" | "reviewing" | "active" | "featured" | "suppressed" | "archived";
 
 export type Product = {
   id: string;
