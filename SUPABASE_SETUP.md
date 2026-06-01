@@ -77,6 +77,8 @@ In Vercel:
    - `EBAY_CLIENT_ID`
    - `EBAY_CLIENT_SECRET`
    - `EBAY_CAMPAIGN_ID`
+   - `RAINFOREST_API_KEY`
+   - `AMAZON_ASSOCIATES_TAG` (optional; defaults to `giftwise081-20`)
    - `OPENAI_API_KEY`
    - `OPENAI_MODEL`
 5. Redeploy the project

@@ -25,6 +25,7 @@ type ReviewPayload = {
 };
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdminClient>;
+type ReviewSource = "amazon" | "ebay";
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -109,11 +110,11 @@ async function reviewProducts(products: DraftProduct[]): Promise<ProductReview[]
   return reviews.flat();
 }
 
-async function claimDraftProducts(supabase: SupabaseAdmin, limit: number): Promise<DraftProduct[]> {
+async function claimDraftProducts(supabase: SupabaseAdmin, source: ReviewSource, limit: number): Promise<DraftProduct[]> {
   const { data: drafts, error: draftError } = await supabase
     .from("products")
     .select("id")
-    .eq("source", "ebay")
+    .eq("source", source)
     .eq("status", "draft")
     .limit(limit);
   if (draftError) throw new Error(`Draft fetch failed: ${draftError.message}`);
@@ -148,6 +149,7 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
+    const source: ReviewSource = searchParams.get("source") === "amazon" ? "amazon" : "ebay";
     const limit = Math.min(Math.max(Number(searchParams.get("limit") || 20), 1), 20);
     const batches = Math.min(Math.max(Number(searchParams.get("batches") || 5), 1), 5);
     let updated = 0;
@@ -156,13 +158,13 @@ export async function GET(request: Request) {
     const { error: staleClaimError } = await supabase
       .from("products")
       .update({ status: "draft" })
-      .eq("source", "ebay")
+      .eq("source", source)
       .eq("status", "reviewing")
       .lt("updated_at", staleClaimCutoff);
     if (staleClaimError) throw new Error(`Stale draft release failed: ${staleClaimError.message}`);
 
     for (let batch = 0; batch < batches; batch += 1) {
-      const products = await claimDraftProducts(supabase, limit);
+      const products = await claimDraftProducts(supabase, source, limit);
       if (!products.length) break;
       const productIds = products.map((product) => product.id);
       const reviews = await reviewProducts(products).catch(async (error) => {
@@ -204,11 +206,11 @@ export async function GET(request: Request) {
     const { count, error: countError } = await supabase
       .from("products")
       .select("id", { count: "exact", head: true })
-      .eq("source", "ebay")
+      .eq("source", source)
       .eq("status", "draft");
     if (countError) throw new Error(`Draft count failed: ${countError.message}`);
 
-    return NextResponse.json({ reviewed: updated, statuses, remainingDrafts: count || 0 });
+    return NextResponse.json({ source, reviewed: updated, statuses, remainingDrafts: count || 0 });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Unknown review error.";
     console.error("Gift catalog review failed", message);
