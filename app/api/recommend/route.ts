@@ -25,10 +25,14 @@ const recallStopwords = new Set([
 
 const lowQualityReasonTerms = [
   "lacks charm",
+  "lacks personal touch",
   "mixed feelings",
+  "no excitement",
   "not substantial",
   "not unique enough",
   "self-purchase",
+  "basic household item",
+  "utilitarian",
   "unlikely to be a thoughtful gift",
   "without much distinctiveness"
 ];
