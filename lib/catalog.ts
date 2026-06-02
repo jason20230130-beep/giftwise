@@ -36,6 +36,10 @@ export const fallbackCatalog: Catalog = {
 };
 
 const catalogPageSize = 1000;
+const catalogCacheTtlMs = 5 * 60 * 1000;
+
+let catalogCache: { expiresAt: number; value: Catalog } | null = null;
+let catalogRequest: Promise<Catalog> | null = null;
 
 async function fetchProductRows() {
   const supabase = getSupabaseBrowserClient();
@@ -103,7 +107,7 @@ function mapOffer(row: OfferRow): MerchantOffer {
   };
 }
 
-export async function fetchCatalog(): Promise<Catalog> {
+async function loadCatalog(): Promise<Catalog> {
   const [{ rows: productRows, error: productError }, { rows: offerRows, error: offerError }] = await Promise.all([
     fetchProductRows(),
     fetchOfferRows()
@@ -119,6 +123,20 @@ export async function fetchCatalog(): Promise<Catalog> {
     products: productRows.map(mapProduct),
     merchantOffers: offerRows.map(mapOffer)
   };
+}
+
+export async function fetchCatalog(): Promise<Catalog> {
+  if (catalogCache && catalogCache.expiresAt > Date.now()) return catalogCache.value;
+  if (catalogRequest) return catalogRequest;
+
+  catalogRequest = loadCatalog().then((catalog) => {
+    catalogCache = { expiresAt: Date.now() + catalogCacheTtlMs, value: catalog };
+    return catalog;
+  }).finally(() => {
+    catalogRequest = null;
+  });
+
+  return catalogRequest;
 }
 
 export async function fetchCatalogForMarketplace(marketplace: Marketplace): Promise<Catalog> {

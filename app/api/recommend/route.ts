@@ -18,6 +18,16 @@ type AiPayload = {
   recommendations: AiRecommendation[];
 };
 
+type RecommendationPayload = {
+  marketplace: Marketplace;
+  profileSummary?: string;
+  recommendations: Recommendation[];
+};
+
+const recommendationCacheTtlMs = 30 * 60 * 1000;
+const recommendationCacheMaxEntries = 200;
+const recommendationCache = new Map<string, { expiresAt: number; value: RecommendationPayload }>();
+
 const recallStopwords = new Set([
   "and", "birthday", "boy", "buy", "easy", "for", "gift", "holiday", "likes", "need",
   "not", "something", "thank", "that", "the", "too", "who", "with"
@@ -123,7 +133,35 @@ function isEligibleCandidate(product: Product, inputs: FinderInputs) {
   return !minorSafetyTerms.some((term) => title.includes(term));
 }
 
+function recommendationCacheKey(inputs: FinderInputs) {
+  return JSON.stringify({
+    brief: inputs.brief.toLowerCase(),
+    mode: inputs.mode,
+    marketplace: inputs.marketplace,
+    answers: inputs.answers || {},
+    excludedProductIds: inputs.excludedProductIds || []
+  });
+}
+
+function getCachedRecommendation(key: string) {
+  const cached = recommendationCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    recommendationCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function cacheRecommendation(key: string, value: RecommendationPayload) {
+  if (recommendationCache.size >= recommendationCacheMaxEntries) {
+    recommendationCache.delete(recommendationCache.keys().next().value!);
+  }
+  recommendationCache.set(key, { expiresAt: Date.now() + recommendationCacheTtlMs, value });
+}
+
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "OPENAI_API_KEY is not configured." }, { status: 500 });
@@ -132,7 +170,18 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const inputs = normalizeInputs(body.inputs || {});
   inputs.marketplace = marketplaceFromRequest(request, inputs.marketplace);
+  const cacheKey = recommendationCacheKey(inputs);
+  const cachedRecommendation = getCachedRecommendation(cacheKey);
+  if (cachedRecommendation) {
+    return NextResponse.json(cachedRecommendation, {
+      headers: {
+        "Server-Timing": `total;dur=${Date.now() - startedAt}`,
+        "X-Giftwise-Cache": "HIT"
+      }
+    });
+  }
   const catalog = await fetchCatalogForMarketplace(inputs.marketplace);
+  const catalogLoadedAt = Date.now();
   const resultCount = inputs.mode === "dna" ? 5 : inputs.mode === "duel" ? 2 : 3;
   const excludedIds = new Set(inputs.excludedProductIds || []);
 
@@ -146,8 +195,9 @@ export async function POST(request: Request) {
   const matchedCandidates = rankedCandidates.filter((item) => item.recall.clueMatches > 0);
   const interestCandidates = matchedCandidates.filter((item) => item.recall.interestMatches > 0);
   const preferredCandidates = interestCandidates.length >= resultCount ? interestCandidates : matchedCandidates;
+  const shortlistSize = interestCandidates.length >= resultCount ? 20 : matchedCandidates.length >= resultCount ? 30 : 40;
   const candidates = preferredCandidates.length >= resultCount
-    ? preferredCandidates.slice(0, 40)
+    ? preferredCandidates.slice(0, shortlistSize)
     : [
         ...preferredCandidates,
         ...rankedCandidates.filter((item) => !preferredCandidates.includes(item)).slice(0, resultCount - preferredCandidates.length)
@@ -226,7 +276,14 @@ export async function POST(request: Request) {
         caution: "Review the listing details before purchasing."
       });
     });
-    return NextResponse.json({ marketplace: inputs.marketplace, profileSummary: parsed.profileSummary, recommendations });
+    const payload = { marketplace: inputs.marketplace, profileSummary: parsed.profileSummary, recommendations };
+    cacheRecommendation(cacheKey, payload);
+    return NextResponse.json(payload, {
+      headers: {
+        "Server-Timing": `catalog;dur=${catalogLoadedAt - startedAt}, ai;dur=${Date.now() - catalogLoadedAt}, total;dur=${Date.now() - startedAt}`,
+        "X-Giftwise-Cache": "MISS"
+      }
+    });
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "Unknown recommendation error.";
     return NextResponse.json({ error: message }, { status: 502 });
