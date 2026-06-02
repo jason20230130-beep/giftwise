@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { createHash } from "node:crypto";
-import { getCache } from "@vercel/functions";
 import { fetchCatalogForMarketplace } from "@/lib/catalog";
 import { isMarketplace, marketplaceFromRequest } from "@/lib/marketplace";
 import { primaryOffer } from "@/lib/recommendations";
@@ -29,7 +27,6 @@ type RecommendationPayload = {
 const recommendationCacheTtlMs = 30 * 60 * 1000;
 const recommendationCacheMaxEntries = 200;
 const recommendationCache = new Map<string, { expiresAt: number; value: RecommendationPayload }>();
-const sharedRecommendationCache = getCache({ namespace: "giftwise-recommendations" });
 
 const recallStopwords = new Set([
   "and", "birthday", "boy", "buy", "easy", "for", "gift", "holiday", "likes", "need",
@@ -146,48 +143,21 @@ function recommendationCacheKey(inputs: FinderInputs) {
   });
 }
 
-function sharedRecommendationCacheKey(key: string) {
-  return createHash("sha256").update(key).digest("hex");
+function getCachedRecommendation(key: string) {
+  const cached = recommendationCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    recommendationCache.delete(key);
+    return null;
+  }
+  return cached.value;
 }
 
-function cacheRecommendationInMemory(key: string, value: RecommendationPayload) {
+function cacheRecommendation(key: string, value: RecommendationPayload) {
   if (recommendationCache.size >= recommendationCacheMaxEntries) {
     recommendationCache.delete(recommendationCache.keys().next().value!);
   }
   recommendationCache.set(key, { expiresAt: Date.now() + recommendationCacheTtlMs, value });
-}
-
-async function getCachedRecommendation(key: string) {
-  const cached = recommendationCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    return { source: "MEMORY_HIT", value: cached.value };
-  }
-  if (cached) {
-    recommendationCache.delete(key);
-  }
-  try {
-    const shared = await sharedRecommendationCache.get(sharedRecommendationCacheKey(key)) as RecommendationPayload | null;
-    if (shared) {
-      cacheRecommendationInMemory(key, shared);
-      return { source: "RUNTIME_HIT", value: shared };
-    }
-  } catch (caught) {
-    console.warn("Recommendation Runtime Cache read failed.", caught);
-  }
-  return null;
-}
-
-async function cacheRecommendation(key: string, value: RecommendationPayload) {
-  cacheRecommendationInMemory(key, value);
-  try {
-    await sharedRecommendationCache.set(sharedRecommendationCacheKey(key), value, {
-      ttl: recommendationCacheTtlMs / 1000,
-      tags: ["giftwise-recommendations"],
-      name: "giftwise-recommendation"
-    });
-  } catch (caught) {
-    console.warn("Recommendation Runtime Cache write failed.", caught);
-  }
 }
 
 export async function POST(request: Request) {
@@ -201,12 +171,12 @@ export async function POST(request: Request) {
   const inputs = normalizeInputs(body.inputs || {});
   inputs.marketplace = marketplaceFromRequest(request, inputs.marketplace);
   const cacheKey = recommendationCacheKey(inputs);
-  const cachedRecommendation = await getCachedRecommendation(cacheKey);
+  const cachedRecommendation = getCachedRecommendation(cacheKey);
   if (cachedRecommendation) {
-    return NextResponse.json(cachedRecommendation.value, {
+    return NextResponse.json(cachedRecommendation, {
       headers: {
         "Server-Timing": `total;dur=${Date.now() - startedAt}`,
-        "X-Giftwise-Cache": cachedRecommendation.source
+        "X-Giftwise-Cache": "HIT"
       }
     });
   }
@@ -307,7 +277,7 @@ export async function POST(request: Request) {
       });
     });
     const payload = { marketplace: inputs.marketplace, profileSummary: parsed.profileSummary, recommendations };
-    await cacheRecommendation(cacheKey, payload);
+    cacheRecommendation(cacheKey, payload);
     return NextResponse.json(payload, {
       headers: {
         "Server-Timing": `catalog;dur=${catalogLoadedAt - startedAt}, ai;dur=${Date.now() - catalogLoadedAt}, total;dur=${Date.now() - startedAt}`,
