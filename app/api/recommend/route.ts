@@ -23,6 +23,21 @@ const recallStopwords = new Set([
   "not", "something", "thank", "that", "the", "too", "who", "with"
 ]);
 
+const lowQualityReasonTerms = [
+  "lacks charm",
+  "mixed feelings",
+  "not substantial",
+  "not unique enough",
+  "self-purchase"
+];
+
+const minorSafetyTerms = [
+  "blade",
+  "knife",
+  "multitool",
+  "survival kit"
+];
+
 function normalizeInputs(value: Partial<FinderInputs>): FinderInputs {
   const mode: GiftMode = value.mode === "badly" || value.mode === "panic" || value.mode === "duel" ? value.mode : "dna";
   return {
@@ -91,6 +106,16 @@ function candidateRecall(product: Product, offer: MerchantOffer, inputs: FinderI
   return { score, clueMatches, interestMatches };
 }
 
+function isEligibleCandidate(product: Product, inputs: FinderInputs) {
+  const reason = product.reason.toLowerCase();
+  if (lowQualityReasonTerms.some((term) => reason.includes(term))) return false;
+  const recipient = String(inputs.answers?.recipient || "").toLowerCase();
+  const isMinor = recipient.includes("teen") || recipient.includes("kid") || recipient.includes("child");
+  if (!isMinor) return true;
+  const title = product.name.toLowerCase();
+  return !minorSafetyTerms.some((term) => title.includes(term));
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -106,6 +131,7 @@ export async function POST(request: Request) {
 
   const rankedCandidates = catalog.products
     .filter((product) => !excludedIds.has(product.id))
+    .filter((product) => isEligibleCandidate(product, inputs))
     .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace, catalog) }))
     .filter((item) => item.offer)
     .map((item) => ({ ...item, recall: candidateRecall(item.product, item.offer!, inputs) }))
