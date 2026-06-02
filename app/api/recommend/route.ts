@@ -115,6 +115,7 @@ function candidateRecall(product: Product, offer: MerchantOffer, inputs: FinderI
 function isEligibleCandidate(product: Product, inputs: FinderInputs) {
   const reason = product.reason.toLowerCase();
   if (lowQualityReasonTerms.some((term) => reason.includes(term))) return false;
+  if (reason.includes("generic") && reason.includes("lacks")) return false;
   const recipient = String(inputs.answers?.recipient || "").toLowerCase();
   const isMinor = recipient.includes("teen") || recipient.includes("kid") || recipient.includes("child");
   if (!isMinor) return true;
