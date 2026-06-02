@@ -64,7 +64,7 @@ function recommendationSchema(resultCount: number) {
   };
 }
 
-function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: FinderInputs) {
+function candidateRecall(product: Product, offer: MerchantOffer, inputs: FinderInputs) {
   const query = [
     inputs.brief,
     ...Object.values(inputs.answers || {}).map(String)
@@ -78,12 +78,16 @@ function candidateRecallScore(product: Product, offer: MerchantOffer, inputs: Fi
   ].join(" ").toLowerCase();
   const budget = inputs.answers?.budget;
   let score = product.status === "featured" ? 0.25 : 0;
+  let clueMatches = 0;
   tokens.forEach((token) => {
-    if (searchableText.includes(token)) score += 1;
+    if (searchableText.includes(token)) {
+      score += 1;
+      clueMatches += 1;
+    }
   });
   if (budget && offer.price > 0 && offer.price <= budget) score += 0.5;
   if (budget && offer.price > budget * 1.5) score -= 0.5;
-  return score;
+  return { score, clueMatches };
 }
 
 export async function POST(request: Request) {
@@ -99,12 +103,19 @@ export async function POST(request: Request) {
   const resultCount = inputs.mode === "dna" ? 5 : inputs.mode === "duel" ? 2 : 3;
   const excludedIds = new Set(inputs.excludedProductIds || []);
 
-  const candidates = catalog.products
+  const rankedCandidates = catalog.products
     .filter((product) => !excludedIds.has(product.id))
     .map((product) => ({ product, offer: primaryOffer(product, inputs.marketplace, catalog) }))
     .filter((item) => item.offer)
-    .sort((a, b) => candidateRecallScore(b.product, b.offer!, inputs) - candidateRecallScore(a.product, a.offer!, inputs))
-    .slice(0, 80);
+    .map((item) => ({ ...item, recall: candidateRecall(item.product, item.offer!, inputs) }))
+    .sort((a, b) => b.recall.score - a.recall.score);
+  const matchedCandidates = rankedCandidates.filter((item) => item.recall.clueMatches > 0);
+  const candidates = matchedCandidates.length >= resultCount
+    ? matchedCandidates.slice(0, 40)
+    : [
+        ...matchedCandidates,
+        ...rankedCandidates.filter((item) => item.recall.clueMatches === 0).slice(0, resultCount - matchedCandidates.length)
+      ];
 
   if (!candidates.length) {
     return NextResponse.json({ marketplace: inputs.marketplace, recommendations: [] });
@@ -119,6 +130,7 @@ export async function POST(request: Request) {
     category: product.category,
     marketplace: offer!.marketplace,
     tags: product.tags,
+    baselineReason: product.reason,
     ...(offer!.price > 0 ? { price: offer!.price, currency: offer!.currency } : {})
   }));
 
