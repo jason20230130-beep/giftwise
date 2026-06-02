@@ -28,7 +28,9 @@ const lowQualityReasonTerms = [
   "mixed feelings",
   "not substantial",
   "not unique enough",
-  "self-purchase"
+  "self-purchase",
+  "unlikely to be a thoughtful gift",
+  "without much distinctiveness"
 ];
 
 const minorSafetyTerms = [
