@@ -11,8 +11,6 @@ type AiRecommendation = {
   productId: string;
   offerId: string;
   score: number;
-  reason: string;
-  caution: string;
 };
 
 type AiPayload = {
@@ -50,13 +48,11 @@ function recommendationSchema(resultCount: number) {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["productId", "offerId", "score", "reason", "caution"],
+          required: ["productId", "offerId", "score"],
           properties: {
             productId: { type: "string" },
             offerId: { type: "string" },
-            score: { type: "number", minimum: 0, maximum: 1 },
-            reason: { type: "string" },
-            caution: { type: "string" }
+            score: { type: "number", minimum: 0, maximum: 1 }
           }
         }
       }
@@ -77,17 +73,22 @@ function candidateRecall(product: Product, offer: MerchantOffer, inputs: FinderI
     ...Object.keys(product.tags || {})
   ].join(" ").toLowerCase();
   const budget = inputs.answers?.budget;
+  const interestTokens = String(inputs.answers?.interest || "").toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2);
   let score = product.status === "featured" ? 0.25 : 0;
   let clueMatches = 0;
+  let interestMatches = 0;
   tokens.forEach((token) => {
     if (searchableText.includes(token)) {
       score += 1;
       clueMatches += 1;
     }
   });
+  interestTokens.forEach((token) => {
+    if (searchableText.includes(token)) interestMatches += 1;
+  });
   if (budget && offer.price > 0 && offer.price <= budget) score += 0.5;
   if (budget && offer.price > budget * 1.5) score -= 0.5;
-  return { score, clueMatches };
+  return { score, clueMatches, interestMatches };
 }
 
 export async function POST(request: Request) {
@@ -110,11 +111,13 @@ export async function POST(request: Request) {
     .map((item) => ({ ...item, recall: candidateRecall(item.product, item.offer!, inputs) }))
     .sort((a, b) => b.recall.score - a.recall.score);
   const matchedCandidates = rankedCandidates.filter((item) => item.recall.clueMatches > 0);
-  const candidates = matchedCandidates.length >= resultCount
-    ? matchedCandidates.slice(0, 40)
+  const interestCandidates = matchedCandidates.filter((item) => item.recall.interestMatches > 0);
+  const preferredCandidates = interestCandidates.length >= resultCount ? interestCandidates : matchedCandidates;
+  const candidates = preferredCandidates.length >= resultCount
+    ? preferredCandidates.slice(0, 40)
     : [
-        ...matchedCandidates,
-        ...rankedCandidates.filter((item) => item.recall.clueMatches === 0).slice(0, resultCount - matchedCandidates.length)
+        ...preferredCandidates,
+        ...rankedCandidates.filter((item) => !preferredCandidates.includes(item)).slice(0, resultCount - preferredCandidates.length)
       ];
 
   if (!candidates.length) {
@@ -142,8 +145,7 @@ export async function POST(request: Request) {
             "You are Giftwise, a sharp and warm gift advisor.",
             "Select only from the provided candidate products. Never invent products, offer IDs, prices, links, or merchants.",
             "Before selecting each product, verify that its exact listing name and category clearly fit the recipient. Reject loosely related, confusing, or inappropriate listings.",
-            "Describe only qualities supported by the selected listing name, category, tags, or baseline reason. Do not write a reason for a different product or invent product features.",
-            "Prefer products within the user's budget. Recommend an over-budget product only when it is unusually strong and acknowledge the tradeoff in caution.",
+            "Prefer products within the user's budget. Recommend an over-budget product only when it is unusually strong.",
             "Apply common-sense safety judgment. Do not recommend weapons or hazardous products for minors.",
             "Infer useful details from the user's natural-language brief. If it is sparse, choose broadly appealing gifts rather than asking questions.",
             inputs.mode === "badly"
@@ -153,7 +155,7 @@ export async function POST(request: Request) {
               : inputs.mode === "duel"
                 ? "Choose exactly two strong products with clearly different personalities so the user faces an interesting choice."
                 : "Use the answers and optional brief to choose a thoughtful five-gift shortlist. Write a concise profile summary.",
-            "Return concise reasons that feel personal and useful, not salesy."
+            "Return only products that clearly fit the user's request."
           ].join(" ")
         },
         {
@@ -176,8 +178,8 @@ export async function POST(request: Request) {
         product: candidate.product,
         offer: candidate.offer,
         score: item.score,
-        personalizedReason: item.reason,
-        caution: item.caution
+        personalizedReason: candidate.product.reason,
+        caution: ""
       });
     });
     candidates.forEach(({ product, offer }) => {
@@ -187,7 +189,7 @@ export async function POST(request: Request) {
         product,
         offer,
         score: 0.5,
-        personalizedReason: `${product.name} is a ${product.category || "gift"} option that matches the available catalog.`,
+        personalizedReason: product.reason,
         caution: "Review the listing details before purchasing."
       });
     });
